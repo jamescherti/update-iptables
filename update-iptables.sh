@@ -56,7 +56,12 @@ FIRST_SUCCESSFUL_RUN_FILE="/var/run/update-iptables.first-run"
 UI_NETWORK_ZONE_FILE="/var/run/update-iptables.network-zone"
 IPTABLES_FILE_AFTER="/etc/.update-iptables-rules-v4.after"
 IPTABLES_FILE_BEFORE="/etc/.update-iptables-rules-v4.before"
+
+UPDATE_IPTABLES_CFG_FILE="/etc/update-iptables-rules"
+UPDATE_IPTABLES_RULES_CFG_DIR="/etc/update-iptables-rules.d"
+
 UI_NETWORK_ZONE="unknown" # Default zone
+VERBOSE=0
 
 # shellcheck disable=SC2329
 ui_error_handler() {
@@ -79,14 +84,22 @@ iptables_noecho() {
 }
 
 iptables() {
-  echo "[CMD] $*"
+  if [[ $VERBOSE -eq 1 ]]; then
+    echo "[CMD] $*"
+  fi
+
   "$IPTABLES_CMD" "$@" || return "$?"
+
   return 0
 }
 
 ip6tables() {
-  echo "[CMD] $*"
+  if [[ $VERBOSE -eq 1 ]]; then
+    echo "[CMD] $*"
+  fi
+
   "$IP6TABLES_CMD" "$@" || return "$?"
+
   return 0
 }
 
@@ -429,7 +442,7 @@ iptables_masquerade() {
 # }
 
 source_all_update_iptables_files() {
-  local directory="/etc/default/update-iptables.d"
+  local directory="$UPDATE_IPTABLES_RULES_CFG_DIR"
   local file
 
   if [[ -d "$directory" ]]; then
@@ -450,16 +463,20 @@ source_all_update_iptables_files() {
 parse_args() {
   UI_RESET=0
   OPTIND=1
-  while getopts ":hr" opt; do
+  while getopts ":hrv" opt; do
     case ${opt} in
     r)
       UI_RESET=1
       ;;
+    v)
+      VERBOSE=1
+      ;;
     h)
       {
-        echo "Usage: $0 [-h] [-r] [flush|flush-all]"
+        echo "Usage: $0 [-h] [-r] [-v] [flush|flush-all]"
         echo
         echo "-r    Reset zone and the previous rules"
+        echo "-v    Enable verbose output for iptables commands"
         echo "-h    Show this help message and exit"
       } >&2
       exit 1
@@ -554,16 +571,19 @@ init() {
 
   trap 'atexit' INT TERM EXIT QUIT
 
+  set -x
+
   # Reset iptables chains
   for chain in MY_INPUT MY_OUTPUT MY_FORWARD; do
-    ui_log_title "FLUSH IPv4 CHAIN: $chain"
-
     # Handle IPv4
+    ui_log_title "FLUSH IPv4 CHAIN: $chain"
     if iptables_noecho -A "$chain"; then
       iptables -F "$chain" || true
       # Note: nat table support for IPv6 requires a newer kernel (3.7+)
-      iptables -t nat -F "$chain" || true
-      iptables -t mangle -F "$chain" || true
+      iptables -t nat -L -n &>/dev/null \
+        && iptables -t nat -F "$chain" || true
+      iptables -t mangle -L -n &>/dev/null \
+        && iptables -t mangle -F "$chain" || true
     else
       # Create the chain
       iptables -N "$chain" || true
@@ -572,8 +592,10 @@ init() {
     ui_log_title "FLUSH IPv6 CHAIN: $chain"
     if "$IP6TABLES_CMD" -A "$chain" 2>/dev/null; then
       # Note: nat table support for IPv6 requires a newer kernel (3.7+)
-      ip6tables -t nat -F "$chain" || true
-      ip6tables -t mangle -F "$chain" || true
+      ip6tables -t nat -L -n &>/dev/null \
+        && ip6tables -t nat -F "$chain" || true
+      ip6tables -t mangle -L -n &>/dev/null \
+        && ip6tables -t mangle -F "$chain" || true
     else
       ip6tables -N "$chain"
     fi
@@ -627,13 +649,18 @@ main() {
   iptables -A MY_INPUT -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
   iptables -A MY_OUTPUT -m conntrack --ctstate ESTABLISHED -j ACCEPT
 
+  # Accept loopback traffic immediately after established connections
+  # Default config for: iptables_accept_localhost
+  iptables -A MY_INPUT -s 127.0.0.0/8 ! -i lo -j DROP
+  iptables -A MY_INPUT -i lo -j ACCEPT
+  iptables -A MY_OUTPUT -d 127.0.0.0/8 ! -o lo -j DROP
+
   drop_invalid
 
   ui_log_title "MAIN RULES"
-
-  if [[ -f /etc/default/update-iptables ]]; then
-    # shellcheck disable=SC1091
-    source /etc/default/update-iptables
+  if [[ -f "$UPDATE_IPTABLES_CFG_FILE" ]]; then
+    # shellcheck disable=SC1090
+    source "$UPDATE_IPTABLES_CFG_FILE"
   fi
 
   source_all_update_iptables_files

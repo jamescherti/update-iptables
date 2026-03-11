@@ -1,0 +1,14 @@
+[Unit]
+Description=Update iptables rules (IPv4 Packet Filtering Framework)
+Before=network-pre.target
+Wants=network-pre.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/update-iptables -r
+ExecReload=/usr/local/bin/update-iptables -r
+ExecStop=true
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

@@ -40,4 +40,6 @@ cd "$SCRIPT_DIR"
 set -o xtrace
 
 install -d "${PREFIX}/bin"
-install -m 755 ./update-iptables.sh "${PREFIX}/bin/"
+install -m 755 update-iptables.sh "${PREFIX}/bin/"
+install -m 644 update-iptables.service \
+  /usr/lib/systemd/system/update-iptables.service
