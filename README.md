@@ -3,7 +3,7 @@
 
 The [update-iptables](https://github.com/jamescherti/update-iptables) script implements a firewall for managing network traffic and routing.
 
-It supports a modular configuration model through drop-in scripts located in `/etc/update-iptables-rules.d/`. Each file is a shell script executed sequentially during firewall initialization.
+It supports a modular configuration model through drop-in scripts located in `/etc/update-iptables.d/`. Each file is a shell script executed sequentially during firewall initialization.
 
 This low-level firewall script is intended for Linux system administrators who require precise control over packet states, network address translation, and custom routing chains. Rules are defined directly through `iptables` without the abstraction layers commonly introduced by modern firewall management tools.
 
@@ -37,12 +37,12 @@ By default, `update-iptables` **blocks all traffic**, including input, output, a
 
 ### Adding Custom Rules
 
-Custom rules can be added by creating a `.rules` script in the `/etc/update-iptables-rules.d/` directory. Files in this directory are sourced sequentially during firewall initialization, allowing modular and organized rule management.
+Custom rules can be added by creating a `.rules` script in the `/etc/update-iptables.d/` directory. Files in this directory are sourced sequentially during firewall initialization, allowing modular and organized rule management.
 
-Create a new file in `/etc/update-iptables-rules.d/` with a descriptive name, ending with `.rules`. For example:
+Create a new file in `/etc/update-iptables.d/` with a descriptive name, ending with `.rules`. For example:
 
 ```bash
-sudo nano /etc/update-iptables-rules.d/10-ssh.rules
+sudo nano /etc/update-iptables.d/10-ssh.rules
 ```
 
 Add your `iptables` commands in the file. For example, to allow incoming SSH connections:
@@ -64,7 +64,7 @@ The new rule will be integrated automatically, respecting the modular structure 
 
 * **Low-level `iptables` control**: Defines firewall rules directly using `iptables` and `ip6tables` without intermediate management layers.
 
-* **Modular configuration**: Supports drop-in rule scripts located in `/etc/update-iptables-rules.d/`. Files with the `.rules` extension are sourced sequentially, allowing incremental and organized firewall configuration.
+* **Modular configuration**: Supports drop-in rule scripts located in `/etc/update-iptables.d/`. Files with the `.rules` extension are sourced sequentially, allowing incremental and organized firewall configuration.
 
 * **Stateful firewall rules**: Uses connection tracking (`conntrack`) to manage `NEW`, `ESTABLISHED`, `RELATED`, and `INVALID` packet states.
 
