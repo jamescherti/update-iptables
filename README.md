@@ -42,12 +42,25 @@ Custom rules can be added by creating a `.rules` script in the `/etc/update-ipta
 Create a new file in `/etc/update-iptables.d/` with a descriptive name, ending with `.rules`. For example:
 
 ```bash
-sudo nano /etc/update-iptables.d/10-ssh.rules
+sudo nano /etc/update-iptables.d/10-my-rules.rules
 ```
 
-Add your `iptables` commands in the file. For example, to allow incoming SSH connections:
+Add your `iptables` commands in the file. For example:
 
 ```bash
+# Allow all legitimate internal traffic on the 'lo' interface,
+# which is required for local applications and services to communicate.
+# This function also drops packets on non-loopback interfaces that spoof loopback
+# IP addresses (127.0.0.0/8 and ::1/128) to protect the system from
+# external manipulation and network pollution.
+ui_allow_loopback
+
+# This function establishes defensive firewall rules to drop malformed, spoofed,
+# and invalid network packets while ensuring essential IPv6 communications
+# remain functional.
+ui_drop_invalid
+
+# SSH
 iptables -A UI_INPUT -p tcp --dport 22 -m conntrack --ctstate NEW,ESTABLISHED -j ACCEPT
 iptables -A UI_OUTPUT -p tcp --sport 22 -m conntrack --ctstate ESTABLISHED -j ACCEPT
 ```

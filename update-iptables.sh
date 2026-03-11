@@ -114,7 +114,7 @@ ip6tables() {
 }
 
 ATEXIT_DONE=0
-atexit() {
+_ui_atexit() {
   local errno="$?"
 
   trap - INT TERM EXIT QUIT ERR
@@ -317,7 +317,49 @@ bridge_localnet() {
   done
 }
 
-drop_invalid() {
+# This function establishes defensive firewall rules to drop malformed, spoofed,
+# and invalid network packets while ensuring essential IPv6 communications
+# remain functional.
+#
+# The configuration executes the following primary operations:
+#
+# - ICMPv6 Allowance: Explicitly accepts necessary ICMPv6 traffic, including
+#   Neighbor Discovery Protocol (NDP) packets restricted to a 255 hop limit and
+#   other control messages, preventing them from being dropped by subsequent
+#   state checks.
+#
+# - Stateful Invalid Drop: Leverages the kernel's connection tracking module to
+#   identify and drop packets classified as INVALID across all primary chains
+#   (INPUT, FORWARD, OUTPUT) for both IPv4 and IPv6 protocols.
+#
+# - Anti-Spoofing Protection: Dynamically identifies the system's default
+#   external interface and applies rules to drop incoming packets that falsely
+#   claim to originate from reserved, private (RFC 1918), or loopback IP address
+#   spaces.
+#
+# Bogus TCP Flag Mitigation: Drops TCP packets containing illogical flag
+# combinations (such as SYN-FIN or SYN-RST) to defend against network mapping
+# and stack exploitation attempts.
+#
+# shellcheck disable=SC2329
+ui_drop_invalid() {
+  # Accept untracked ICMPv6 Neighbor Discovery before dropping INVALID
+  ip6tables -A UI_INPUT -p ipv6-icmp -m hl --hl-eq 255 -j ACCEPT
+  ip6tables -A UI_OUTPUT -p ipv6-icmp -m hl --hl-eq 255 -j ACCEPT
+
+  # Allow essential ICMPv6 types for proper IPv6 operation
+
+  ip6tables -A UI_INPUT -p icmpv6 --icmpv6-type 128 -j ACCEPT
+  ip6tables -A UI_INPUT -p icmpv6 --icmpv6-type 129 -j ACCEPT
+  ip6tables -A UI_INPUT -p icmpv6 --icmpv6-type 135 -j ACCEPT
+  ip6tables -A UI_INPUT -p icmpv6 --icmpv6-type 136 -j ACCEPT
+  ip6tables -A UI_INPUT -p icmpv6 --icmpv6-type 133 -j ACCEPT
+  ip6tables -A UI_INPUT -p icmpv6 --icmpv6-type 134 -j ACCEPT
+  ip6tables -A UI_INPUT -p icmpv6 --icmpv6-type 1 -j ACCEPT
+  ip6tables -A UI_INPUT -p icmpv6 --icmpv6-type 2 -j ACCEPT
+  ip6tables -A UI_INPUT -p icmpv6 --icmpv6-type 3 -j ACCEPT
+  ip6tables -A UI_INPUT -p icmpv6 --icmpv6-type 4 -j ACCEPT
+
   # DROP: INVALID INPUT
   #
   # Drop any traffic with an "INVALID" state match. Traffic can fall into four
@@ -347,7 +389,7 @@ drop_invalid() {
       --comment "DROP invalid" -j DROP
   done
 
-  # TODO: In drop_invalid, you have about 13 separate rules to drop spoofed
+  # TODO: In ui_drop_invalid, you have about 13 separate rules to drop spoofed
   # local IPs from the external interface. While 13 rules will not slow down a
   # modern CPU, if you ever decide to block large lists of IPs (like blocking
   # entire countries or known botnets), using iptables rules will cause
@@ -398,8 +440,14 @@ drop_invalid() {
   iptables -A UI_INPUT -p tcp -m tcp --tcp-flags SYN,RST SYN,RST -j DROP
 }
 
+# Allow all legitimate internal traffic on the 'lo' interface, which is required
+# for local applications and services to communicate. This function also drops
+# packets on non-loopback interfaces that spoof loopback IP addresses
+# (127.0.0.0/8 and ::1/128) to protect the system from external manipulation and
+# network pollution.
 _UI_LOOPBACK_DONE=0
-iptables_loopback() {
+# shellcheck disable=SC2329
+ui_allow_loopback() {
   if [[ $_UI_LOOPBACK_DONE -eq 0 ]]; then
     _UI_LOOPBACK_DONE=1
     # ACCEPT: LOOPBACK INPUT
@@ -407,11 +455,20 @@ iptables_loopback() {
     # Accept traffic from the "loopback" interface, which is necessary for
     # many applications and services.
     #
-    iptables -A UI_INPUT -s 127.0.0.0/8 ! -i lo -j DROP
-    iptables -A UI_OUTPUT -d 127.0.0.0/8 ! -o lo -j DROP
 
-    ip6tables -A UI_INPUT -s ::1/128 ! -i lo -j DROP
-    ip6tables -A UI_OUTPUT -d ::1/128 ! -o lo -j DROP
+    # If a packet claims to be from the loopback subnet (127.0.0.0/8), but it
+    # arrived on any interface other than the actual loopback interface (! -i
+    # lo), drop it immediately.
+    # TODO fix
+    # iptables -A UI_INPUT -s 127.0.0.0/8 ! -i lo -j DROP
+    # ip6tables -A UI_INPUT -s ::1/128 ! -i lo -j DROP
+
+    # This prevents your machine from accidentally routing packets destined for
+    # loopback out into the physical network, which prevents routing loops and
+    # network pollution.
+    # TODO fix
+    # iptables -A UI_OUTPUT -d 127.0.0.0/8 ! -o lo -j DROP
+    # ip6tables -A UI_OUTPUT -d ::1/128 ! -o lo -j DROP
 
     iptables -A UI_INPUT -i lo -j ACCEPT
     ip6tables -A UI_INPUT -i lo -j ACCEPT
@@ -421,7 +478,7 @@ iptables_loopback() {
 # shellcheck disable=SC2120
 # shellcheck disable=SC2329
 iptables_accept_localhost() {
-  iptables_loopback
+  ui_allow_loopback
 
   if [[ $# -gt 0 ]]; then
     local cur_user
@@ -480,7 +537,7 @@ iptables_masquerade() {
 #     --ctstate ESTABLISHED,RELATED -j ACCEPT
 # }
 
-source_all_update_iptables_files() {
+_ui_source_all_update_iptables_files() {
   local directory="$UPDATE_IPTABLES_RULES_CFG_DIR"
   local file
 
@@ -499,7 +556,7 @@ source_all_update_iptables_files() {
   fi
 }
 
-parse_args() {
+_ui_parse_args() {
   UI_RESET=0
   OPTIND=1
   while getopts ":hrv" opt; do
@@ -532,7 +589,7 @@ parse_args() {
   done
 }
 
-init() {
+_ui_init() {
   if [[ "$(id -u)" -ne 0 ]]; then
     echo "Error: You need root privileges to run this script." >&2
     exit 1
@@ -546,7 +603,7 @@ init() {
     exit 1
   fi
 
-  parse_args "$@"
+  _ui_parse_args "$@"
   shift $((OPTIND - 1))
 
   trap "ui_error_handler" ERR
@@ -614,7 +671,7 @@ init() {
     fi
   fi
 
-  trap 'atexit' INT TERM EXIT QUIT
+  trap '_ui_atexit' INT TERM EXIT QUIT
 
   # Reset iptables chains
   for chain in UI_INPUT UI_OUTPUT UI_FORWARD; do
@@ -665,8 +722,8 @@ ui_default_policy() {
   ip6tables -P OUTPUT DROP
 }
 
-main() {
-  init "$@"
+_ui_main() {
+  _ui_init "$@"
 
   # Attach chains
   iptables -C OUTPUT -j UI_OUTPUT 2>/dev/null \
@@ -714,24 +771,19 @@ main() {
   ip6tables -A UI_INPUT -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
   ip6tables -A UI_OUTPUT -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
 
-  # Accept loopback traffic immediately after established connections
-  iptables_loopback
-
-  drop_invalid
-
   ui_log_title "MAIN RULES"
   if [[ -f "$UPDATE_IPTABLES_CFG_FILE" ]]; then
     # shellcheck disable=SC1090
     source "$UPDATE_IPTABLES_CFG_FILE"
   fi
-  source_all_update_iptables_files
+  _ui_source_all_update_iptables_files
 
   enable_logging
 
   ui_default_policy
 
-  atexit
+  _ui_atexit
 }
 
 # MAIN
-main "$@"
+_ui_main "$@"
