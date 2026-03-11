@@ -112,6 +112,23 @@ ui_allow_loopback() {
 }
 
 #
+# Accept all incoming ICMP echo requests, also known as pings. Only the first
+# packet will count as new, the others will be handled by the RELATED,
+# ESTABLISHED rule. Since the computer is not a router, no other ICMP with
+# state NEW needs to be allowed.
+#
+# shellcheck disable=SC2329
+ui_allow_ping() {
+  iptables -A UI_INPUT -p icmp --icmp-type 8 \
+    -m conntrack --ctstate NEW \
+    -m comment --comment "Accept IPv4 ping" -j ACCEPT
+
+  ip6tables -A UI_INPUT -p ipv6-icmp --icmpv6-type 128 \
+    -m conntrack --ctstate NEW \
+    -m comment --comment "Accept IPv6 ping" -j ACCEPT
+}
+
+#
 # This function establishes defensive firewall rules to drop malformed, spoofed,
 # and invalid network packets.
 #

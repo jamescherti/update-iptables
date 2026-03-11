@@ -66,6 +66,12 @@ ui_allow_loopback
 # and invalid network packets.
 ui_drop_invalid
 
+# Accept all incoming ICMP echo requests, also known as pings. Only the first
+# packet will count as new, the others will be handled by the RELATED,
+# ESTABLISHED rule. Since the computer is not a router, no other ICMP with
+# state NEW needs to be allowed.
+ui_allow_ping
+
 # Permit outbound network traffic for a specific list of local system users.
 # (Usernames that do not exist on the host are silently ignored.)
 ui_allow_users_output systemd-timesync sockd proxy root alpm
