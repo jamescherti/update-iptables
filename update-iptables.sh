@@ -149,8 +149,10 @@ atexit() {
       if [[ -n "$IPTABLES_FILE_BEFORE" ]]; then
         if cmp -s "$IPTABLES_FILE_AFTER" "$IPTABLES_FILE_BEFORE"; then
           echo "[INFO] Nothing has changed."
-        elif type -P diff &>/dev/null && [[ -n "$IPTABLES_FILE_AFTER" ]]; then
-          if [[ -f "$IPTABLES_FILE_AFTER" ]] && [[ -f "$IPTABLES_FILE_BEFORE" ]]; then
+        elif type -P diff &>/dev/null \
+          && [[ -n "$IPTABLES_FILE_AFTER" ]]; then
+          if [[ -f "$IPTABLES_FILE_AFTER" ]] \
+            && [[ -f "$IPTABLES_FILE_BEFORE" ]]; then
             echo "Diff:"
             echo "--------------------------------------------------------------------"
             diff --color -rupN "$IPTABLES_FILE_BEFORE" "$IPTABLES_FILE_AFTER" || true
@@ -199,7 +201,8 @@ allow_ping() {
   # ESTABLISHED rule. Since the computer is not a router, no other ICMP with
   # state NEW needs to be allowed.
   # DO NOT ACTIVATE IT.
-  iptables -A UI_INPUT -p icmp --icmp-type 8 -m conntrack --ctstate NEW -j ACCEPT
+  iptables -A UI_INPUT -p icmp --icmp-type 8 \
+    -m conntrack --ctstate NEW -j ACCEPT
 }
 
 # shellcheck disable=SC2329
@@ -234,7 +237,7 @@ enable_logging() {
     # Log the packet, then return to let standard routing handle it
     # cooperatively
     iptables -A "LOGGING_$item" -m limit --limit 10/min -j LOG \
-      --log-prefix "[IPTABLES LOG $item] " --log-level 4
+      --log-prefix "[UPDATE-IPTABLES $item] " --log-level 4
     iptables -A "LOGGING_$item" -j RETURN
   done
 }
