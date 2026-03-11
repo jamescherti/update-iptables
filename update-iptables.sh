@@ -134,6 +134,11 @@ ip6tables() {
   return 0
 }
 
+ui_46iptables() {
+  iptables "$@"
+  ip6tables "$@"
+}
+
 # shellcheck disable=SC2329
 _ui_error_handler() {
   local errno="$?"
