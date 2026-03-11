@@ -33,7 +33,7 @@ systemctl enable update-iptables
 
 ## Usage
 
-By default, `update-iptables` blocks all traffic, including input, output, and forwarding, except for connections on the loopback interface.
+By default, `update-iptables` **blocks all traffic**, including input, output, and forwarding, except for connections on the loopback interface.
 
 ### Adding Custom Rules
 
