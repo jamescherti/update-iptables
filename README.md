@@ -1,9 +1,9 @@
 # update-iptables - A low-level Linux firewall for advanced users
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 
-The `update-iptables` Bash script implements a firewall for managing network traffic and routing.
+The `update-iptables` script implements a firewall for managing network traffic and routing.
 
-It supports a modular configuration model through drop-in scripts located in `/etc/update-iptables-rules.d/`. Each file is a Bash script executed sequentially during firewall initialization.
+It supports a modular configuration model through drop-in scripts located in `/etc/update-iptables-rules.d/`. Each file is a shell script executed sequentially during firewall initialization.
 
 This low-level firewall script is intended for Linux system administrators who require precise control over packet states, network address translation, and custom routing chains. Rules are defined directly through `iptables` without the abstraction layers commonly introduced by modern firewall management tools.
 
@@ -68,9 +68,9 @@ The new rule will be integrated automatically, respecting the modular structure 
 
 * **Per-user network policies**: Allows outgoing traffic to be restricted or permitted based on the Unix user ID using the `owner` module.
 
-* **Secure default policy**: Uses restrictive default policies (`DROP`) until rules are successfully applied.
+* **Secure default policy**: Uses restrictive default policies (DROP) until rules are successfully applied.
 
-* **Automatic rule validation and rollback behavior**: In case of failure during execution, all policies are locked down to `DROP` to avoid leaving the system in an insecure state.
+* **Automatic rule validation and rollback behavior**: In case of failure during execution, all policies are locked down to DROP to avoid leaving the system in an insecure state.
 
 * **Packet logging support**: Optional logging chains record packets passing through firewall chains with rate limiting.
 
