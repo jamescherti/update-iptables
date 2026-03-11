@@ -139,10 +139,14 @@ atexit() {
         echo "[SAVE] Rules saved to: $IPTABLES_FILE_AFTER"
         touch "$IPTABLES_FILE_AFTER"
         chmod 600 "$IPTABLES_FILE_AFTER"
+
+        echo >"$IPTABLES_FILE_AFTER"
         if type -P iptables-save &>/dev/null; then
-          iptables-save >"$IPTABLES_FILE_AFTER"
-        else
-          echo >"$IPTABLES_FILE_AFTER"
+          iptables-save >>"$IPTABLES_FILE_AFTER"
+        fi
+
+        if type -P ip6tables-save &>/dev/null; then
+          ip6tables-save >>"$IPTABLES_FILE_AFTER"
         fi
       fi
 
@@ -229,16 +233,24 @@ enable_logging() {
     # Safely create and flush the logging chain
     iptables -N "LOGGING_$item" 2>/dev/null || true
     iptables -F "LOGGING_$item"
+    ip6tables -N "LOGGING_$item" 2>/dev/null || true
+    ip6tables -F "LOGGING_$item"
 
     # Append the logging chain to the end of the main chain
     iptables -C "$item" -j "LOGGING_$item" 2>/dev/null \
       || iptables -A "$item" -j "LOGGING_$item"
+    ip6tables -C "$item" -j "LOGGING_$item" 2>/dev/null \
+      || ip6tables -A "$item" -j "LOGGING_$item"
 
     # Log the packet, then return to let standard routing handle it
     # cooperatively
     iptables -A "LOGGING_$item" -m limit --limit 10/min -j LOG \
       --log-prefix "[UPDATE-IPTABLES $item] " --log-level 4
     iptables -A "LOGGING_$item" -j RETURN
+
+    ip6tables -A "LOGGING_$item" -m limit --limit 10/min -j LOG \
+      --log-prefix "[UPDATE-IP6TABLES $item] " --log-level 4
+    ip6tables -A "LOGGING_$item" -j RETURN
   done
 }
 
@@ -321,9 +333,11 @@ drop_invalid() {
   #         always be classified "INVALID" though they are not corrupted or the
   #         like. Keep this in mind, and accept them before this rule: iptables
   #         -A INPUT -p 41 -j ACCEPT
-  local mode
   for mode in UI_INPUT UI_FORWARD UI_OUTPUT; do
     iptables -A "$mode" -m conntrack --ctstate INVALID -m comment \
+      --comment "DROP invalid" -j DROP
+
+    ip6tables -A "$mode" -m conntrack --ctstate INVALID -m comment \
       --comment "DROP invalid" -j DROP
   done
 
@@ -377,8 +391,7 @@ drop_invalid() {
   iptables -A UI_INPUT -p tcp -m tcp --tcp-flags SYN,RST SYN,RST -j DROP
 }
 
-# shellcheck disable=SC2329
-iptables_accept_localhost() {
+iptables_loopback() {
   # ACCEPT: LOOPBACK INPUT
   #
   # Accept traffic from the "loopback" interface, which is necessary for
@@ -387,6 +400,16 @@ iptables_accept_localhost() {
   iptables -A UI_INPUT -s 127.0.0.0/8 ! -i lo -j DROP
   iptables -A UI_INPUT -i lo -j ACCEPT
   iptables -A UI_OUTPUT -d 127.0.0.0/8 ! -o lo -j DROP
+
+  ip6tables -A UI_INPUT -s ::1/128 ! -i lo -j DROP
+  ip6tables -A UI_INPUT -i lo -j ACCEPT
+  ip6tables -A UI_OUTPUT -d ::1/128 ! -o lo -j DROP
+}
+
+# shellcheck disable=SC2120
+# shellcheck disable=SC2329
+iptables_accept_localhost() {
+  iptables_loopback
 
   if [[ $# -gt 0 ]]; then
     local cur_user
@@ -569,10 +592,13 @@ init() {
   if [[ $IPTABLES_FILE_BEFORE != "" ]]; then
     touch "$IPTABLES_FILE_BEFORE"
     chmod 600 "$IPTABLES_FILE_BEFORE"
+    echo >"$IPTABLES_FILE_BEFORE"
     if type -P iptables-save &>/dev/null; then
-      iptables-save >"$IPTABLES_FILE_BEFORE"
-    else
-      echo >"$IPTABLES_FILE_BEFORE"
+      iptables-save >>"$IPTABLES_FILE_BEFORE"
+    fi
+
+    if type -P ip6tables-save &>/dev/null; then
+      ip6tables-save >>"$IPTABLES_FILE_BEFORE"
     fi
   fi
 
@@ -652,11 +678,12 @@ main() {
   iptables -A UI_INPUT -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
   iptables -A UI_OUTPUT -m conntrack --ctstate ESTABLISHED -j ACCEPT
 
+  ip6tables -A UI_FORWARD -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
+  ip6tables -A UI_INPUT -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
+  ip6tables -A UI_OUTPUT -m conntrack --ctstate ESTABLISHED -j ACCEPT
+
   # Accept loopback traffic immediately after established connections
-  # Default config for: iptables_accept_localhost
-  iptables -A UI_INPUT -s 127.0.0.0/8 ! -i lo -j DROP
-  iptables -A UI_INPUT -i lo -j ACCEPT
-  iptables -A UI_OUTPUT -d 127.0.0.0/8 ! -o lo -j DROP
+  iptables_loopback
 
   drop_invalid
 
@@ -674,6 +701,10 @@ main() {
     || iptables -I OUTPUT 1 -j UI_OUTPUT
   iptables -C INPUT -j UI_INPUT 2>/dev/null \
     || iptables -I INPUT 1 -j UI_INPUT
+  ip6tables -C OUTPUT -j UI_OUTPUT 2>/dev/null \
+    || ip6tables -I OUTPUT 1 -j UI_OUTPUT
+  ip6tables -C INPUT -j UI_INPUT 2>/dev/null \
+    || ip6tables -I INPUT 1 -j UI_INPUT
 
   ui_default_policy
 
