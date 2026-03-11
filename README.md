@@ -10,6 +10,17 @@ For system administrators who require absolute control over packet states, netwo
 
 It allows you to build a modular firewall by integrating drop-in configuration files while maintaining exact visibility into how every packet traverses the kernel network stack.
 
+## Installation
+
+To install `update-iptables` scripts system-wide, use the following command:
+```bash
+git clone https://github.com/jamescherti/update-iptables
+cd update-iptables
+
+sudo ./install.sh
+```
+
+
 ## License
 
 Copyright (C) 2012-2026 [James Cherti](https://www.jamescherti.com)
