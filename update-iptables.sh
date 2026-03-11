@@ -238,6 +238,29 @@ bridge_internet() {
   iptables -A MY_OUTPUT -d "$cidr" -j ACCEPT
 }
 
+# TODO Since the script includes NAT/Routing functions (bridge_internet and
+# iptables_masquerade), you should add TCP MSS (Maximum Segment Size) clamping.
+# When routing traffic, especially over certain connections like PPPoE or VPNs,
+# MTU (Maximum Transmission Unit) mismatches can cause packets to be dropped
+# silently (a "MTU black hole"). This forces re-transmissions and makes the
+# internet feel very slow or causes specific websites to hang.
+# shellcheck disable=SC2329
+# bridge_internet() {
+#   # Connect the bridge to the Internet.
+#   local cidr="$1"
+#
+#   iptables -t nat -A POSTROUTING -s "$cidr" ! -d "$cidr" -j MASQUERADE
+#   # Prevent MTU black holes
+#   iptables -t mangle -A FORWARD -p tcp --tcp-flags SYN,RST SYN \
+#     -j TCPMSS --clamp-mss-to-pmtu
+#
+#   iptables -A MY_FORWARD -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT
+#
+#   iptables -A MY_FORWARD -s "$cidr" -j ACCEPT
+#   iptables -A MY_FORWARD -d "$cidr" -j ACCEPT
+#   iptables -A MY_OUTPUT -d "$cidr" -j ACCEPT
+# }
+
 # shellcheck disable=SC2329
 bridge_localnet() {
   # Connect the local network
@@ -286,6 +309,13 @@ drop_invalid() {
     iptables -A "$mode" -m conntrack --ctstate INVALID -m comment \
       --comment "DROP invalid" -j DROP
   done
+
+  # TODO: In drop_invalid, you have about 13 separate rules to drop spoofed
+  # local IPs from the external interface. While 13 rules will not slow down a
+  # modern CPU, if you ever decide to block large lists of IPs (like blocking
+  # entire countries or known botnets), using iptables rules will cause
+  # significant latency. For large lists, you would want to use ipset, which
+  # uses O(1) hash table lookups.
 
   # Reject packets from RFC1918 class networks (i.e., spoofed)
   # Drop spoofed packets claiming to be from private/local networks
@@ -378,6 +408,25 @@ iptables_masquerade() {
   iptables -A MY_FORWARD -i "$out_nic" -o "$in_nic" -m conntrack \
     --ctstate ESTABLISHED,RELATED -j ACCEPT
 }
+
+# TODO Since the script includes NAT/Routing functions (bridge_internet and
+# iptables_masquerade), you should add TCP MSS (Maximum Segment Size) clamping.
+# When routing traffic, especially over certain connections like PPPoE or VPNs,
+# MTU (Maximum Transmission Unit) mismatches can cause packets to be dropped
+# silently (a "MTU black hole"). This forces re-transmissions and makes the
+# internet feel very slow or causes specific websites to hang.
+# iptables_masquerade() {
+#   local out_nic="$1"
+#   local in_nic="$2"
+#   local in_cidr="$3"
+#   iptables -A MY_FORWARD -i "$in_nic" -o "$out_nic" -j ACCEPT
+#   iptables -t nat -A POSTROUTING -s "$in_cidr" -o "$out_nic" -j MASQUERADE
+#   # Prevent MTU black holes
+#   iptables -t mangle -A FORWARD -p tcp --tcp-flags SYN,RST SYN -j TCPMSS --clamp-mss-to-pmtu
+#
+#   iptables -A MY_FORWARD -i "$out_nic" -o "$in_nic" -m conntrack \
+#     --ctstate ESTABLISHED,RELATED -j ACCEPT
+# }
 
 source_all_update_iptables_files() {
   local directory="/etc/default/update-iptables.d"
@@ -556,8 +605,6 @@ ui_default_policy() {
 main() {
   init "$@"
 
-  drop_invalid
-
   # ACCEPT ESTABLISHED INPUT/OUTPUT
   # --------------------------------
   # Every packet that is received by any network interface will pass the INPUT
@@ -579,6 +626,8 @@ main() {
   iptables -A MY_FORWARD -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
   iptables -A MY_INPUT -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
   iptables -A MY_OUTPUT -m conntrack --ctstate ESTABLISHED -j ACCEPT
+
+  drop_invalid
 
   ui_log_title "MAIN RULES"
 
