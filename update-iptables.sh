@@ -86,7 +86,8 @@ ui_log_title() {
 }
 
 iptables_noecho() {
-  "$IPTABLES_CMD" "$@" || return "$?"
+  # -w: Add automatic xtables lock waiting.
+  "$IPTABLES_CMD" -w 5 "$@" || return "$?"
   return 0
 }
 
@@ -197,6 +198,7 @@ allow_user_outgoing() {
   args+=("-m" "owner" "--uid-owner" "$user" "-j" "ACCEPT")
   if id "$user" >/dev/null; then
     iptables "${args[@]}"
+    ip6tables "${args[@]}"
   fi
 }
 
