@@ -617,16 +617,14 @@ ui_default_policy() {
   iptables -t nat -F "UI_POSTROUTING" &>/dev/null || true
   iptables -t nat -N "UI_POSTROUTING" &>/dev/null || true
 
-  if ! [[ -f "$FIRST_SUCCESSFUL_RUN_FILE" ]]; then
-    iptables -P FORWARD DROP
-    iptables -P INPUT DROP
-    iptables -P OUTPUT DROP
+  iptables -P FORWARD DROP
+  iptables -P INPUT DROP
+  iptables -P OUTPUT DROP
 
-    # Set default drop for IPv6 to prevent traffic bypass
-    ip6tables -P FORWARD DROP
-    ip6tables -P INPUT DROP
-    ip6tables -P OUTPUT DROP
-  fi
+  # Set default drop for IPv6 to prevent traffic bypass
+  ip6tables -P FORWARD DROP
+  ip6tables -P INPUT DROP
+  ip6tables -P OUTPUT DROP
 }
 
 main() {
@@ -667,7 +665,6 @@ main() {
     # shellcheck disable=SC1090
     source "$UPDATE_IPTABLES_CFG_FILE"
   fi
-
   source_all_update_iptables_files
 
   enable_logging
