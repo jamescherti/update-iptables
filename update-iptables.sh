@@ -61,7 +61,7 @@ UPDATE_IPTABLES_CFG_FILE="/etc/update-iptables-rules"
 UPDATE_IPTABLES_RULES_CFG_DIR="/etc/update-iptables-rules.d"
 
 UI_NETWORK_ZONE="unknown" # Default zone
-VERBOSE=0
+VERBOSE=1
 
 # shellcheck disable=SC2329
 ui_error_handler() {
