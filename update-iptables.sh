@@ -474,11 +474,12 @@ _ui_default_policy() {
   _ui_log_title "DEFAULT POLICY"
 
   # Always ensure NAT chains exist
-  iptables -t nat -F "UI_PREROUTING" &>/dev/null || true
-  iptables -t nat -N "UI_PREROUTING" &>/dev/null || true
+  # TODO Check if prerouting and postrouting exist?
+  iptables -t nat -F UI_PREROUTING &>/dev/null || true
+  iptables -t nat -N UI_PREROUTING &>/dev/null || true
 
-  iptables -t nat -F "UI_POSTROUTING" &>/dev/null || true
-  iptables -t nat -N "UI_POSTROUTING" &>/dev/null || true
+  iptables -t nat -F UI_POSTROUTING &>/dev/null || true
+  iptables -t nat -N UI_POSTROUTING &>/dev/null || true
 
   ui_46iptables -P FORWARD DROP
   ui_46iptables -P INPUT DROP
@@ -510,6 +511,8 @@ _ui_main() {
   ip6tables -C FORWARD -j UI_FORWARD 2>/dev/null \
     || ip6tables -I FORWARD 1 -j UI_FORWARD
 
+  _ui_default_policy
+
   _ui_log_title "MAIN RULES"
   if [[ -f "$UPDATE_IPTABLES_CFG_FILE" ]]; then
     # shellcheck disable=SC1090
@@ -518,9 +521,6 @@ _ui_main() {
   _ui_source_all_update_iptables_files
 
   _ui_enable_logging
-
-  _ui_default_policy
-
   _ui_atexit
 }
 
