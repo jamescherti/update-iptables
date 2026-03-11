@@ -1,6 +1,5 @@
-# update-iptables - A low-level, script-driven Linux firewall for advanced users
-
-## Introduction
+# update-iptables - A low-level Linux firewall for advanced users
+[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 
 The `update-iptables` Bash script implements a firewall for managing network traffic and routing.
 
