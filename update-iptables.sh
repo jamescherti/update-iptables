@@ -93,16 +93,14 @@ ui_allow_loopback() {
     # iptables -A UI_OUTPUT -d 127.0.0.0/8 ! -o lo -j DROP
     # ip6tables -A UI_OUTPUT -d ::1/128 ! -o lo -j DROP
 
-    iptables -A UI_INPUT -i lo -j ACCEPT
-    ip6tables -A UI_INPUT -i lo -j ACCEPT
+    ui_46iptables -A UI_INPUT -i lo -j ACCEPT
 
     # ACCEPT: LOOPBACK OUTPUT
     #
     # Accept the traffic from the "loopback" interface, which is necessary for
     # many applications and services.
     #
-    iptables -A UI_OUTPUT -o lo -j ACCEPT
-    ip6tables -A UI_OUTPUT -o lo -j ACCEPT
+    ui_46iptables -A UI_OUTPUT -o lo -j ACCEPT
   fi
 }
 
@@ -179,12 +177,9 @@ _ui_atexit() {
       echo >&2
       echo "ERROR with iptables!" >&2
       echo "[INFO] Locking down policies to DROP due to failure." >&2
-      iptables -P FORWARD DROP
-      iptables -P INPUT DROP
-      iptables -P OUTPUT DROP
-      ip6tables -P FORWARD DROP
-      ip6tables -P INPUT DROP
-      ip6tables -P OUTPUT DROP
+      ui_46iptables -P FORWARD DROP
+      ui_46iptables -P INPUT DROP
+      ui_46iptables -P OUTPUT DROP
     else
       if [[ -n "$IPTABLES_FILE_AFTER" ]]; then
         echo "[SAVE] Rules saved to: $IPTABLES_FILE_AFTER"
@@ -228,10 +223,8 @@ _ui_enable_logging() {
   local item
   for item in UI_INPUT UI_OUTPUT UI_FORWARD; do
     # Safely create and flush the logging chain
-    iptables -N "LOGGING_$item" 2>/dev/null || true
-    iptables -F "LOGGING_$item"
-    ip6tables -N "LOGGING_$item" 2>/dev/null || true
-    ip6tables -F "LOGGING_$item"
+    ui_46iptables -N "LOGGING_$item" 2>/dev/null || true
+    ui_46iptables -F "LOGGING_$item"
 
     # Append the logging chain to the end of the main chain
     iptables -C "$item" -j "LOGGING_$item" 2>/dev/null \
@@ -243,11 +236,10 @@ _ui_enable_logging() {
     # cooperatively
     iptables -A "LOGGING_$item" -m limit --limit 10/min --limit-burst 20 \
       -j LOG --log-prefix "[UPDATE-IPTABLES $item] " --log-level 4
-    iptables -A "LOGGING_$item" -j RETURN
-
     ip6tables -A "LOGGING_$item" -m limit --limit 10/min --limit-burst 20 \
       -j LOG --log-prefix "[UPDATE-IP6TABLES $item] " --log-level 4
-    ip6tables -A "LOGGING_$item" -j RETURN
+
+    ui_46iptables -A "LOGGING_$item" -j RETURN
   done
 }
 
@@ -282,7 +274,6 @@ ui_drop_invalid() {
   ip6tables -A UI_OUTPUT -p ipv6-icmp -m hl --hl-eq 255 -j ACCEPT
 
   # Allow essential ICMPv6 types for proper IPv6 operation
-
   ip6tables -A UI_INPUT -p icmpv6 --icmpv6-type 128 -j ACCEPT
   ip6tables -A UI_INPUT -p icmpv6 --icmpv6-type 129 -j ACCEPT
   ip6tables -A UI_INPUT -p icmpv6 --icmpv6-type 135 -j ACCEPT
@@ -316,10 +307,7 @@ ui_drop_invalid() {
   #         like. Keep this in mind, and accept them before this rule: iptables
   #         -A INPUT -p 41 -j ACCEPT
   for mode in UI_INPUT UI_FORWARD UI_OUTPUT; do
-    iptables -A "$mode" -m conntrack --ctstate INVALID -m comment \
-      --comment "DROP invalid" -j DROP
-
-    ip6tables -A "$mode" -m conntrack --ctstate INVALID -m comment \
+    ui_46iptables -A "$mode" -m conntrack --ctstate INVALID -m comment \
       --comment "DROP invalid" -j DROP
   done
 
@@ -461,9 +449,8 @@ _ui_init() {
   if [[ $# -gt 0 ]] && [[ $1 == "flush" ]]; then
     # flush (delete) only managed chains cooperatively
     for chain in UI_INPUT UI_OUTPUT UI_FORWARD UI_PREROUTING UI_POSTROUTING; do
-      iptables -F "$chain" 2>/dev/null || true
+      ui_46iptables -F "$chain" 2>/dev/null || true
       iptables -t nat -F "$chain" 2>/dev/null || true
-      ip6tables -F "$chain" 2>/dev/null || true
     done
 
     echo "Success: iptables custom rules flushed successfully."
@@ -473,23 +460,13 @@ _ui_init() {
   if [[ $# -gt 0 ]] && [[ $1 == "flush-all" ]]; then
     rm -f "$FIRST_SUCCESSFUL_RUN_FILE"
 
-    iptables -F # flush (delete) rules
-    iptables -Z # zero counters
-    iptables -X # delete all extra chains
+    ui_46iptables -F
+    ui_46iptables -Z
+    ui_46iptables -X
 
-    # set default policies to let everything in
-    iptables --policy INPUT ACCEPT
-    iptables --policy OUTPUT ACCEPT
-    iptables --policy FORWARD ACCEPT
-
-    # Also flush IPv6
-    ip6tables -F
-    ip6tables -Z
-    ip6tables -X
-
-    ip6tables --policy INPUT ACCEPT
-    ip6tables --policy OUTPUT ACCEPT
-    ip6tables --policy FORWARD ACCEPT
+    ui_46iptables --policy INPUT ACCEPT
+    ui_46iptables --policy OUTPUT ACCEPT
+    ui_46iptables --policy FORWARD ACCEPT
 
     echo "Success: iptables rules flushed successfully."
     exit 0
@@ -512,8 +489,7 @@ _ui_init() {
 
   # Reset iptables chains
   for chain in UI_INPUT UI_OUTPUT UI_FORWARD; do
-    # Handle IPv4
-    _ui_log_title "FLUSH IPv4 CHAIN: $chain"
+    _ui_log_title "FLUSH CHAIN: $chain"
     if iptables_noecho -A "$chain"; then
       iptables -F "$chain" || true
       # Note: nat table support for IPv6 requires a newer kernel (3.7+)
@@ -549,14 +525,9 @@ _ui_default_policy() {
   iptables -t nat -F "UI_POSTROUTING" &>/dev/null || true
   iptables -t nat -N "UI_POSTROUTING" &>/dev/null || true
 
-  iptables -P FORWARD DROP
-  iptables -P INPUT DROP
-  iptables -P OUTPUT DROP
-
-  # Set default drop for IPv6 to prevent traffic bypass
-  ip6tables -P FORWARD DROP
-  ip6tables -P INPUT DROP
-  ip6tables -P OUTPUT DROP
+  ui_46iptables -P FORWARD DROP
+  ui_46iptables -P INPUT DROP
+  ui_46iptables -P OUTPUT DROP
 }
 
 _ui_main() {
@@ -571,12 +542,14 @@ _ui_main() {
     || ip6tables -I OUTPUT 1 -j UI_OUTPUT
   ip6tables -C INPUT -j UI_INPUT 2>/dev/null \
     || ip6tables -I INPUT 1 -j UI_INPUT
+
   # Add my postrouting to postrouting
   iptables -t nat -C POSTROUTING -j UI_POSTROUTING 2>/dev/null \
     || iptables -t nat -I POSTROUTING 1 -j UI_POSTROUTING
   # Add my prerouting to prerouting
   iptables -t nat -C PREROUTING -j UI_PREROUTING 2>/dev/null \
     || iptables -t nat -I PREROUTING 1 -j UI_PREROUTING
+
   iptables -C FORWARD -j UI_FORWARD 2>/dev/null \
     || iptables -I FORWARD 1 -j UI_FORWARD
   ip6tables -C FORWARD -j UI_FORWARD 2>/dev/null \
@@ -600,13 +573,9 @@ _ui_main() {
   # allowed the initial (--ctstate NEW) connection attempt or the connection was
   # already active (for example an active remote SSH connection) when setting
   # the rule below.
-  iptables -A UI_FORWARD -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
-  iptables -A UI_INPUT -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
-  iptables -A UI_OUTPUT -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
-
-  ip6tables -A UI_FORWARD -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
-  ip6tables -A UI_INPUT -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
-  ip6tables -A UI_OUTPUT -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
+  ui_46iptables -A UI_FORWARD -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
+  ui_46iptables -A UI_INPUT -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
+  ui_46iptables -A UI_OUTPUT -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
 
   _ui_log_title "MAIN RULES"
   if [[ -f "$UPDATE_IPTABLES_CFG_FILE" ]]; then
