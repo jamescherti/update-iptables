@@ -1,4 +1,4 @@
-# update-iptables - A low-level Linux Firewall
+# update-iptables - A low-level, script-driven Linux firewall for advanced users
 
 ## Introduction
 
@@ -6,7 +6,7 @@ The `update-iptables` Bash script implements a firewall for managing network tra
 
 It supports a modular configuration model through drop-in scripts located in `/etc/update-iptables-rules.d/`. Each file is a Bash script executed sequentially during firewall initialization.
 
-This firewall is intended for Linux system administrators who require precise control over packet states, network address translation, and custom routing chains. Rules are defined directly through `iptables` without the abstraction layers commonly introduced by modern firewall management tools.
+This low-level firewall script is intended for Linux system administrators who require precise control over packet states, network address translation, and custom routing chains. Rules are defined directly through `iptables` without the abstraction layers commonly introduced by modern firewall management tools.
 
 ## Installation
 
