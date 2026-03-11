@@ -57,7 +57,7 @@ UI_NETWORK_ZONE_FILE="/var/run/update-iptables.network-zone"
 IPTABLES_FILE_AFTER="/etc/.update-iptables-rules-v4.after"
 IPTABLES_FILE_BEFORE="/etc/.update-iptables-rules-v4.before"
 
-UPDATE_IPTABLES_CFG_FILE="/etc/update-iptables-rules"
+UPDATE_IPTABLES_CFG_FILE="/etc/update-iptables.rules"
 UPDATE_IPTABLES_RULES_CFG_DIR="/etc/update-iptables-rules.d"
 
 UI_NETWORK_ZONE="unknown" # Default zone
