@@ -7,6 +7,12 @@ It supports a modular configuration model through drop-in scripts located in `/e
 
 This low-level firewall script is intended for Linux system administrators who require precise control over packet states, network address translation, and custom routing chains. Rules are defined directly through `iptables` without the abstraction layers commonly introduced by modern firewall management tools.
 
+## Requirements
+
+- `bash`
+- iptables (`iptables` and `ip6tables`)
+- Optional: `diff` and `cmp`
+
 ## Installation
 
 Install `update-iptables` system-wide with the following commands:
