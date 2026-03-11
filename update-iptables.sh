@@ -63,26 +63,47 @@ UPDATE_IPTABLES_RULES_CFG_DIR="/etc/update-iptables.d"
 UI_NETWORK_ZONE="unknown" # Default zone
 VERBOSE=1
 
+# Allow all legitimate internal traffic on the 'lo' interface, which is required
+# for local applications and services to communicate. This function also drops
+# packets on non-loopback interfaces that spoof loopback IP addresses
+# (127.0.0.0/8 and ::1/128) to protect the system from external manipulation and
+# network pollution.
+_UI_LOOPBACK_DONE=0
 # shellcheck disable=SC2329
-ui_error_handler() {
-  local errno="$?"
-  trap - INT TERM EXIT QUIT ERR
-  echo "Error: ${BASH_SOURCE[1]}:${BASH_LINENO[0]}" \
-    "(${BASH_COMMAND} exited with status $errno)" >&2
-  exit "${errno}"
-}
+ui_allow_loopback() {
+  if [[ $_UI_LOOPBACK_DONE -eq 0 ]]; then
+    _UI_LOOPBACK_DONE=1
+    # ACCEPT: LOOPBACK INPUT
+    #
+    # Accept traffic from the "loopback" interface, which is necessary for
+    # many applications and services.
+    #
 
-_UI_FIRST_TITLE=1
-ui_log_title() {
-  if [[ $_UI_FIRST_TITLE -ne 0 ]]; then
-    _UI_FIRST_TITLE=0
-  else
-    echo
+    # If a packet claims to be from the loopback subnet (127.0.0.0/8), but it
+    # arrived on any interface other than the actual loopback interface (! -i
+    # lo), drop it immediately.
+    # TODO fix
+    # iptables -A UI_INPUT -s 127.0.0.0/8 ! -i lo -j DROP
+    # ip6tables -A UI_INPUT -s ::1/128 ! -i lo -j DROP
+
+    # This prevents your machine from accidentally routing packets destined for
+    # loopback out into the physical network, which prevents routing loops and
+    # network pollution.
+    # TODO fix
+    # iptables -A UI_OUTPUT -d 127.0.0.0/8 ! -o lo -j DROP
+    # ip6tables -A UI_OUTPUT -d ::1/128 ! -o lo -j DROP
+
+    iptables -A UI_INPUT -i lo -j ACCEPT
+    ip6tables -A UI_INPUT -i lo -j ACCEPT
+
+    # ACCEPT: LOOPBACK OUTPUT
+    #
+    # Accept the traffic from the "loopback" interface, which is necessary for
+    # many applications and services.
+    #
+    iptables -A UI_OUTPUT -o lo -j ACCEPT
+    ip6tables -A UI_OUTPUT -o lo -j ACCEPT
   fi
-
-  echo '========================================================='
-  echo "$@"
-  echo '========================================================='
 }
 
 iptables_noecho() {
@@ -113,6 +134,28 @@ ip6tables() {
   return 0
 }
 
+# shellcheck disable=SC2329
+_ui_error_handler() {
+  local errno="$?"
+  trap - INT TERM EXIT QUIT ERR
+  echo "Error: ${BASH_SOURCE[1]}:${BASH_LINENO[0]}" \
+    "(${BASH_COMMAND} exited with status $errno)" >&2
+  exit "${errno}"
+}
+
+_UI_FIRST_TITLE=1
+_ui_log_title() {
+  if [[ $_UI_FIRST_TITLE -ne 0 ]]; then
+    _UI_FIRST_TITLE=0
+  else
+    echo
+  fi
+
+  echo '========================================================='
+  echo "$@"
+  echo '========================================================='
+}
+
 ATEXIT_DONE=0
 _ui_atexit() {
   local errno="$?"
@@ -121,7 +164,7 @@ _ui_atexit() {
 
   if [[ $ATEXIT_DONE -eq 0 ]]; then
     ATEXIT_DONE=1
-    ui_log_title 'ATEXIT'
+    _ui_log_title 'ATEXIT'
 
     if [[ $errno -eq 0 ]]; then
       touch "$FIRST_SUCCESSFUL_RUN_FILE"
@@ -176,64 +219,7 @@ _ui_atexit() {
   exit "$errno"
 }
 
-# shellcheck disable=SC2329
-allow_user_outgoing() {
-  local args=()
-  args=("-A" "UI_OUTPUT")
-
-  local user="$1"
-
-  if [[ "$#" -gt 1 ]]; then
-    args+=("-p" "$2")
-  fi
-
-  if [[ "$#" -gt 2 ]]; then
-    args+=("--destination" "$3")
-  fi
-
-  if [[ "$#" -gt 3 ]]; then
-    args+=("--dport" "$4")
-  fi
-
-  args+=("-m" "owner" "--uid-owner" "$user" "-j" "ACCEPT")
-  if id "$user" >/dev/null; then
-    iptables "${args[@]}"
-    ip6tables "${args[@]}"
-  fi
-}
-
-# shellcheck disable=SC2329
-allow_ping() {
-  # Accept all incoming ICMP echo requests, also known as pings. Only the first
-  # packet will count as new, the others will be handled by the RELATED,
-  # ESTABLISHED rule. Since the computer is not a router, no other ICMP with
-  # state NEW needs to be allowed.
-  iptables -A UI_INPUT -p icmp --icmp-type 8 \
-    -m conntrack --ctstate NEW -j ACCEPT
-
-  ip6tables -A UI_INPUT -p ipv6-icmp --icmpv6-type 128 \
-    -m conntrack --ctstate NEW -j ACCEPT
-}
-
-# shellcheck disable=SC2329
-attach_tcp_udp_input() {
-  # Now we attach the TCP and UDP chains to the INPUT chain to handle all
-  # incoming connections. Once a connection is accepted by either TCP or UDP
-  # chain, it is handled by the RELATED/ESTABLISHED traffic rule. The TCP and
-  # UDP chains will either accept new incoming connections, or politely reject
-  # them. New TCP connection must be started with SYN packets.
-  #
-  # Note: NEW but not SYN is the only invalid TCP flag that is not covered by
-  # the INVALID state. This is because they are rarely malicious packets and
-  # should not just be dropped. Instead, they are simply rejected with a TCP
-  # UI_RESET by the next rule.
-  #
-  iptables -A UI_INPUT -p udp -m conntrack --ctstate NEW -j UDP
-  iptables -A UI_INPUT -p tcp --tcp-flags FIN,SYN,RST,ACK SYN -m conntrack \
-    --ctstate NEW -j TCP
-}
-
-enable_logging() {
+_ui_enable_logging() {
   local item
   for item in UI_INPUT UI_OUTPUT UI_FORWARD; do
     # Safely create and flush the logging chain
@@ -257,63 +243,6 @@ enable_logging() {
     ip6tables -A "LOGGING_$item" -m limit --limit 10/min --limit-burst 20 \
       -j LOG --log-prefix "[UPDATE-IP6TABLES $item] " --log-level 4
     ip6tables -A "LOGGING_$item" -j RETURN
-  done
-}
-
-# shellcheck disable=SC2329
-bridge_internet() {
-  # Connect the bridge to the Internet.
-  local cidr="$1"
-
-  iptables -t nat -A POSTROUTING -s "$cidr" ! -d "$cidr" -j MASQUERADE
-  iptables -A UI_FORWARD -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT
-
-  iptables -A UI_FORWARD -s "$cidr" -j ACCEPT
-  iptables -A UI_FORWARD -d "$cidr" -j ACCEPT
-  iptables -A UI_OUTPUT -d "$cidr" -j ACCEPT
-}
-
-# TODO Since the script includes NAT/Routing functions (bridge_internet and
-# iptables_masquerade), you should add TCP MSS (Maximum Segment Size) clamping.
-# When routing traffic, especially over certain connections like PPPoE or VPNs,
-# MTU (Maximum Transmission Unit) mismatches can cause packets to be dropped
-# silently (a "MTU black hole"). This forces re-transmissions and makes the
-# internet feel very slow or causes specific websites to hang.
-# shellcheck disable=SC2329
-# bridge_internet() {
-#   # Connect the bridge to the Internet.
-#   local cidr="$1"
-#
-#   iptables -t nat -A POSTROUTING -s "$cidr" ! -d "$cidr" -j MASQUERADE
-#   # Prevent MTU black holes
-#   iptables -t mangle -A FORWARD -p tcp --tcp-flags SYN,RST SYN \
-#     -j TCPMSS --clamp-mss-to-pmtu
-#
-#   iptables -A UI_FORWARD -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT
-#
-#   iptables -A UI_FORWARD -s "$cidr" -j ACCEPT
-#   iptables -A UI_FORWARD -d "$cidr" -j ACCEPT
-#   iptables -A UI_OUTPUT -d "$cidr" -j ACCEPT
-# }
-
-# shellcheck disable=SC2329
-bridge_localnet() {
-  # Connect the local network
-  local cidr="$1"
-  shift
-  local interface="$1"
-  shift
-
-  iptables -A UI_FORWARD -d "$cidr" -o "$interface" -j ACCEPT
-  iptables -A UI_FORWARD -s "$cidr" -i "$interface" -j ACCEPT
-
-  # allow traffic between virtual machines TODO: needed?
-  iptables -A UI_FORWARD -i "$interface" -o "$interface" -j ACCEPT
-  iptables -A UI_OUTPUT -d "$cidr" -o "$interface" -j ACCEPT
-
-  while [[ $# -gt 0 ]]; do
-    iptables -A UI_FORWARD -s "$cidr" -i "$interface" -d "$1" -j ACCEPT
-    shift
   done
 }
 
@@ -440,104 +369,6 @@ ui_drop_invalid() {
   iptables -A UI_INPUT -p tcp -m tcp --tcp-flags SYN,RST SYN,RST -j DROP
 }
 
-# Allow all legitimate internal traffic on the 'lo' interface, which is required
-# for local applications and services to communicate. This function also drops
-# packets on non-loopback interfaces that spoof loopback IP addresses
-# (127.0.0.0/8 and ::1/128) to protect the system from external manipulation and
-# network pollution.
-_UI_LOOPBACK_DONE=0
-# shellcheck disable=SC2329
-ui_allow_loopback() {
-  if [[ $_UI_LOOPBACK_DONE -eq 0 ]]; then
-    _UI_LOOPBACK_DONE=1
-    # ACCEPT: LOOPBACK INPUT
-    #
-    # Accept traffic from the "loopback" interface, which is necessary for
-    # many applications and services.
-    #
-
-    # If a packet claims to be from the loopback subnet (127.0.0.0/8), but it
-    # arrived on any interface other than the actual loopback interface (! -i
-    # lo), drop it immediately.
-    # TODO fix
-    # iptables -A UI_INPUT -s 127.0.0.0/8 ! -i lo -j DROP
-    # ip6tables -A UI_INPUT -s ::1/128 ! -i lo -j DROP
-
-    # This prevents your machine from accidentally routing packets destined for
-    # loopback out into the physical network, which prevents routing loops and
-    # network pollution.
-    # TODO fix
-    # iptables -A UI_OUTPUT -d 127.0.0.0/8 ! -o lo -j DROP
-    # ip6tables -A UI_OUTPUT -d ::1/128 ! -o lo -j DROP
-
-    iptables -A UI_INPUT -i lo -j ACCEPT
-    ip6tables -A UI_INPUT -i lo -j ACCEPT
-
-    # ACCEPT: LOOPBACK OUTPUT
-    #
-    # Accept the traffic from the "loopback" interface, which is necessary for
-    # many applications and services.
-    #
-    iptables -A UI_OUTPUT -o lo -j ACCEPT
-    ip6tables -A UI_OUTPUT -o lo -j ACCEPT
-  fi
-}
-
-# shellcheck disable=SC2120
-# shellcheck disable=SC2329
-iptables_accept_localhost() {
-  ui_allow_loopback
-
-  if [[ $# -gt 0 ]]; then
-    local cur_user
-    for cur_user in "$@"; do
-      if id "$cur_user" &>/dev/null; then
-        iptables -A UI_OUTPUT -o lo -m owner --uid-owner "$cur_user" -j ACCEPT
-      fi
-    done
-  fi
-}
-
-# shellcheck disable=SC2329
-iptables_accept_output_users() {
-  local cur_user
-  for cur_user in "$@"; do
-    if id "$cur_user" &>/dev/null; then
-      iptables -A UI_OUTPUT -m owner --uid-owner "$cur_user" -j ACCEPT
-    fi
-  done
-}
-
-# shellcheck disable=SC2329
-iptables_masquerade() {
-  local out_nic="$1"
-  local in_nic="$2"
-  local in_cidr="$3"
-  iptables -A UI_FORWARD -i "$in_nic" -o "$out_nic" -j ACCEPT
-  iptables -t nat -A POSTROUTING -s "$in_cidr" -o "$out_nic" -j MASQUERADE
-  iptables -A UI_FORWARD -i "$out_nic" -o "$in_nic" -m conntrack \
-    --ctstate ESTABLISHED,RELATED -j ACCEPT
-}
-
-# TODO Since the script includes NAT/Routing functions (bridge_internet and
-# iptables_masquerade), you should add TCP MSS (Maximum Segment Size) clamping.
-# When routing traffic, especially over certain connections like PPPoE or VPNs,
-# MTU (Maximum Transmission Unit) mismatches can cause packets to be dropped
-# silently (a "MTU black hole"). This forces re-transmissions and makes the
-# internet feel very slow or causes specific websites to hang.
-# iptables_masquerade() {
-#   local out_nic="$1"
-#   local in_nic="$2"
-#   local in_cidr="$3"
-#   iptables -A UI_FORWARD -i "$in_nic" -o "$out_nic" -j ACCEPT
-#   iptables -t nat -A POSTROUTING -s "$in_cidr" -o "$out_nic" -j MASQUERADE
-#   # Prevent MTU black holes
-#   iptables -t mangle -A FORWARD -p tcp --tcp-flags SYN,RST SYN -j TCPMSS --clamp-mss-to-pmtu
-#
-#   iptables -A UI_FORWARD -i "$out_nic" -o "$in_nic" -m conntrack \
-#     --ctstate ESTABLISHED,RELATED -j ACCEPT
-# }
-
 _ui_source_all_update_iptables_files() {
   local directory="$UPDATE_IPTABLES_RULES_CFG_DIR"
   local file
@@ -607,7 +438,7 @@ _ui_init() {
   _ui_parse_args "$@"
   shift $((OPTIND - 1))
 
-  trap "ui_error_handler" ERR
+  trap "_ui_error_handler" ERR
   set -o errtrace
 
   if [[ $UI_RESET -eq 0 ]]; then
@@ -677,7 +508,7 @@ _ui_init() {
   # Reset iptables chains
   for chain in UI_INPUT UI_OUTPUT UI_FORWARD; do
     # Handle IPv4
-    ui_log_title "FLUSH IPv4 CHAIN: $chain"
+    _ui_log_title "FLUSH IPv4 CHAIN: $chain"
     if iptables_noecho -A "$chain"; then
       iptables -F "$chain" || true
       # Note: nat table support for IPv6 requires a newer kernel (3.7+)
@@ -690,7 +521,7 @@ _ui_init() {
       iptables -N "$chain" || true
     fi
 
-    ui_log_title "FLUSH IPv6 CHAIN: $chain"
+    _ui_log_title "FLUSH IPv6 CHAIN: $chain"
     if "$IP6TABLES_CMD" -A "$chain" 2>/dev/null; then
       # Note: nat table support for IPv6 requires a newer kernel (3.7+)
       ip6tables -t nat -L -n &>/dev/null \
@@ -703,8 +534,8 @@ _ui_init() {
   done
 }
 
-ui_default_policy() {
-  ui_log_title "DEFAULT POLICY"
+_ui_default_policy() {
+  _ui_log_title "DEFAULT POLICY"
 
   # Always ensure NAT chains exist
   iptables -t nat -F "UI_PREROUTING" &>/dev/null || true
@@ -772,16 +603,16 @@ _ui_main() {
   ip6tables -A UI_INPUT -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
   ip6tables -A UI_OUTPUT -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
 
-  ui_log_title "MAIN RULES"
+  _ui_log_title "MAIN RULES"
   if [[ -f "$UPDATE_IPTABLES_CFG_FILE" ]]; then
     # shellcheck disable=SC1090
     source "$UPDATE_IPTABLES_CFG_FILE"
   fi
   _ui_source_all_update_iptables_files
 
-  enable_logging
+  _ui_enable_logging
 
-  ui_default_policy
+  _ui_default_policy
 
   _ui_atexit
 }
