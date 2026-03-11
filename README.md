@@ -48,6 +48,13 @@ sudo nano /etc/update-iptables.d/10-my-rules.rules
 Add your `iptables` commands in the file. For example:
 
 ```bash
+# Accept traffic belonging to already established connections or packets related
+# to them (such as ICMP error messages). This rule is the cornerstone of a
+# stateful firewall; it ensures that once a connection has been permitted by a
+# specific rule, all subsequent packets for that session are processed quickly
+# and efficiently without re-evaluating the entire rule set.
+ui_allow_established
+
 # Allow all legitimate internal traffic on the 'lo' interface,
 # which is required for local applications and services to communicate.
 # This function also drops packets on non-loopback interfaces that spoof loopback
@@ -56,9 +63,12 @@ Add your `iptables` commands in the file. For example:
 ui_allow_loopback
 
 # This function establishes defensive firewall rules to drop malformed, spoofed,
-# and invalid network packets while ensuring essential IPv6 communications
-# remain functional.
+# and invalid network packets.
 ui_drop_invalid
+
+# Permit outbound network traffic for a specific list of local system users.
+# (Usernames that do not exist on the host are silently ignored.)
+ui_allow_users_output systemd-timesync sockd proxy root alpm
 
 # SSH
 iptables -A UI_INPUT -p tcp --dport 22 -m conntrack --ctstate NEW,ESTABLISHED -j ACCEPT

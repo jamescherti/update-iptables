@@ -63,6 +63,21 @@ UPDATE_IPTABLES_RULES_CFG_DIR="/etc/update-iptables.d"
 UI_NETWORK_ZONE="unknown" # Default zone
 VERBOSE=1
 
+# Accept traffic belonging to already established connections or packets related
+# to them (such as ICMP error messages). This rule is the cornerstone of a
+# stateful firewall; it ensures that once a connection has been permitted by a
+# specific rule, all subsequent packets for that session are processed quickly
+# and efficiently without re-evaluating the entire rule set.
+# shellcheck disable=SC2329
+ui_allow_established() {
+  ui_46iptables \
+    -A UI_FORWARD -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
+  ui_46iptables \
+    -A UI_INPUT -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
+  ui_46iptables \
+    -A UI_OUTPUT -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
+}
+
 # Allow all legitimate internal traffic on the 'lo' interface, which is required
 # for local applications and services to communicate. This function also drops
 # packets on non-loopback interfaces that spoof loopback IP addresses
@@ -104,10 +119,69 @@ ui_allow_loopback() {
   fi
 }
 
-iptables_noecho() {
-  # -w: Add automatic xtables lock waiting.
-  "$IPTABLES_CMD" -w 5 "$@" || return "$?"
-  return 0
+#
+# This function establishes defensive firewall rules to drop malformed, spoofed,
+# and invalid network packets.
+#
+# shellcheck disable=SC2329
+ui_drop_invalid() {
+  # Drop any traffic with an "INVALID" state match.
+  for mode in UI_INPUT UI_FORWARD UI_OUTPUT; do
+    ui_46iptables -A "$mode" -m conntrack --ctstate INVALID -m comment \
+      --comment "DROP invalid" -j DROP
+  done
+
+  # Reject packets from RFC1918 class networks (i.e., spoofed) Drop spoofed
+  # packets claiming to be from private/local networks Replace 'eth0' with your
+  # actual external interface name
+  local ext_if
+  ext_if=""
+  ext_if=$(ip route show default | awk '/default/ {print $5}' | head -n 1) \
+    || true
+
+  # Ensure that the interface exists
+  if [[ -n "$ext_if" ]] && ip link show "$ext_if" &>/dev/null; then
+    iptables -A UI_INPUT -i "$ext_if" -s 127.0.0.0/8 -j DROP
+    iptables -A UI_INPUT -i "$ext_if" -s 10.0.0.0/8 -j DROP
+    iptables -A UI_INPUT -i "$ext_if" -s 169.254.0.0/16 -j DROP
+    iptables -A UI_INPUT -i "$ext_if" -s 172.16.0.0/12 -j DROP
+    iptables -A UI_INPUT -i "$ext_if" -s 192.168.0.0/16 -j DROP
+    iptables -A UI_INPUT -i "$ext_if" -s 224.0.0.0/4 -j DROP
+    iptables -A UI_INPUT -i "$ext_if" -d 224.0.0.0/4 -j DROP
+    iptables -A UI_INPUT -i "$ext_if" -s 240.0.0.0/5 -j DROP
+    iptables -A UI_INPUT -i "$ext_if" -d 240.0.0.0/5 -j DROP
+    iptables -A UI_INPUT -i "$ext_if" -s 0.0.0.0/8 -j DROP
+    iptables -A UI_INPUT -i "$ext_if" -d 0.0.0.0/8 -j DROP
+    iptables -A UI_INPUT -i "$ext_if" -d 239.255.255.0/24 -j DROP
+    iptables -A UI_INPUT -i "$ext_if" -d 255.255.255.255 -j DROP
+  fi
+
+  # This section identifies and drops TCP packets with illogical flag
+  # combinations, such as SYN and FIN or SYN and RST being set simultaneously.
+  # Since these combinations are physically impossible in legitimate network
+  # communication, they are often used by attackers to probe network stacks for
+  # vulnerabilities or bypass security filters. Dropping them prevents potential
+  # exploitation of unusual OS behaviors when handling malformed packets.
+  iptables -A UI_INPUT -p tcp -m tcp --tcp-flags SYN,FIN SYN,FIN -j DROP
+  iptables -A UI_INPUT -p tcp -m tcp --tcp-flags SYN,RST SYN,RST -j DROP
+}
+
+#
+# Permit outbound network traffic for a specific list of local system users. The
+# function iterates through the provided usernames, verifies their existence on
+# the system, and appends rules to the UI_OUTPUT chain using the 'owner' module
+# to match traffic by UID.
+#
+# Usernames that do not exist on the host are silently ignored.
+#
+# shellcheck disable=SC2329
+ui_allow_users_output() {
+  local cur_user
+  for cur_user in "$@"; do
+    if id "$cur_user" &>/dev/null; then
+      iptables -A UI_OUTPUT -m owner --uid-owner "$cur_user" -j ACCEPT
+    fi
+  done
 }
 
 iptables() {
@@ -243,125 +317,6 @@ _ui_enable_logging() {
   done
 }
 
-# This function establishes defensive firewall rules to drop malformed, spoofed,
-# and invalid network packets while ensuring essential IPv6 communications
-# remain functional.
-#
-# The configuration executes the following primary operations:
-#
-# - ICMPv6 Allowance: Explicitly accepts necessary ICMPv6 traffic, including
-#   Neighbor Discovery Protocol (NDP) packets restricted to a 255 hop limit and
-#   other control messages, preventing them from being dropped by subsequent
-#   state checks.
-#
-# - Stateful Invalid Drop: Leverages the kernel's connection tracking module to
-#   identify and drop packets classified as INVALID across all primary chains
-#   (INPUT, FORWARD, OUTPUT) for both IPv4 and IPv6 protocols.
-#
-# - Anti-Spoofing Protection: Dynamically identifies the system's default
-#   external interface and applies rules to drop incoming packets that falsely
-#   claim to originate from reserved, private (RFC 1918), or loopback IP address
-#   spaces.
-#
-# Bogus TCP Flag Mitigation: Drops TCP packets containing illogical flag
-# combinations (such as SYN-FIN or SYN-RST) to defend against network mapping
-# and stack exploitation attempts.
-#
-# shellcheck disable=SC2329
-ui_drop_invalid() {
-  # Accept untracked ICMPv6 Neighbor Discovery before dropping INVALID
-  ip6tables -A UI_INPUT -p ipv6-icmp -m hl --hl-eq 255 -j ACCEPT
-  ip6tables -A UI_OUTPUT -p ipv6-icmp -m hl --hl-eq 255 -j ACCEPT
-
-  # Allow essential ICMPv6 types for proper IPv6 operation
-  ip6tables -A UI_INPUT -p icmpv6 --icmpv6-type 128 -j ACCEPT
-  ip6tables -A UI_INPUT -p icmpv6 --icmpv6-type 129 -j ACCEPT
-  ip6tables -A UI_INPUT -p icmpv6 --icmpv6-type 135 -j ACCEPT
-  ip6tables -A UI_INPUT -p icmpv6 --icmpv6-type 136 -j ACCEPT
-  ip6tables -A UI_INPUT -p icmpv6 --icmpv6-type 133 -j ACCEPT
-  ip6tables -A UI_INPUT -p icmpv6 --icmpv6-type 134 -j ACCEPT
-  ip6tables -A UI_INPUT -p icmpv6 --icmpv6-type 1 -j ACCEPT
-  ip6tables -A UI_INPUT -p icmpv6 --icmpv6-type 2 -j ACCEPT
-  ip6tables -A UI_INPUT -p icmpv6 --icmpv6-type 3 -j ACCEPT
-  ip6tables -A UI_INPUT -p icmpv6 --icmpv6-type 4 -j ACCEPT
-
-  # DROP: INVALID INPUT
-  #
-  # Drop any traffic with an "INVALID" state match. Traffic can fall into four
-  # "state" categories: NEW, ESTABLISHED, RELATED and INVALID.  This is what
-  # makes this a "stateful" firewall rather than a less secure "stateless" one.
-  # States are tracked using the "nf_conntrack_" kernel module which are loaded
-  # automatically by the kernel as you add rules.
-  #
-  # Note: 1. This rule will drop all packets with invalid headers and checksums,
-  #       invalid TCP flags, invalid ICMP messages (such as a port unreachable
-  #       when we did not send anything to the host), and out of sequence
-  #       packets which can be caused by sequence prediction or other similar
-  #       attacks. The "DROP" target will drop a packet without any response,
-  #       contrary to REJECT which politely refuses the packet. We use DROP
-  #       because there is no REJECT response to packets that are INVALID, and
-  #       we do not want to acknowledge that we received these packets.
-  #
-  #         2. ICMPv6 Neighbor Discovery packets remain untracked, and will
-  #         always be classified "INVALID" though they are not corrupted or the
-  #         like. Keep this in mind, and accept them before this rule: iptables
-  #         -A INPUT -p 41 -j ACCEPT
-  for mode in UI_INPUT UI_FORWARD UI_OUTPUT; do
-    ui_46iptables -A "$mode" -m conntrack --ctstate INVALID -m comment \
-      --comment "DROP invalid" -j DROP
-  done
-
-  # TODO: In ui_drop_invalid, you have about 13 separate rules to drop spoofed
-  # local IPs from the external interface. While 13 rules will not slow down a
-  # modern CPU, if you ever decide to block large lists of IPs (like blocking
-  # entire countries or known botnets), using iptables rules will cause
-  # significant latency. For large lists, you would want to use ipset, which
-  # uses O(1) hash table lookups.
-
-  # Reject packets from RFC1918 class networks (i.e., spoofed)
-  # Drop spoofed packets claiming to be from private/local networks
-  # Replace 'eth0' with your actual external interface name
-  # TODO auto detect ext_if
-  local ext_if
-  # Auto-detect the external interface by looking up the default route
-  ext_if=""
-  ext_if=$(ip route show default | awk '/default/ {print $5}' | head -n 1) \
-    || true
-
-  # Ensure that the interface exists
-  if [[ -n "$ext_if" ]] && ip link show "$ext_if" &>/dev/null; then
-    iptables -A UI_INPUT -i "$ext_if" -s 127.0.0.0/8 -j DROP
-    iptables -A UI_INPUT -i "$ext_if" -s 10.0.0.0/8 -j DROP
-    iptables -A UI_INPUT -i "$ext_if" -s 169.254.0.0/16 -j DROP
-    iptables -A UI_INPUT -i "$ext_if" -s 172.16.0.0/12 -j DROP
-    iptables -A UI_INPUT -i "$ext_if" -s 192.168.0.0/16 -j DROP
-    iptables -A UI_INPUT -i "$ext_if" -s 224.0.0.0/4 -j DROP
-    iptables -A UI_INPUT -i "$ext_if" -d 224.0.0.0/4 -j DROP
-    iptables -A UI_INPUT -i "$ext_if" -s 240.0.0.0/5 -j DROP
-    iptables -A UI_INPUT -i "$ext_if" -d 240.0.0.0/5 -j DROP
-    iptables -A UI_INPUT -i "$ext_if" -s 0.0.0.0/8 -j DROP
-    iptables -A UI_INPUT -i "$ext_if" -d 0.0.0.0/8 -j DROP
-    iptables -A UI_INPUT -i "$ext_if" -d 239.255.255.0/24 -j DROP
-    iptables -A UI_INPUT -i "$ext_if" -d 255.255.255.255 -j DROP
-  fi
-
-  # Drop bogus TCP packets
-  # Beyond packet spoofing, there are other types of bogus packets an
-  # attacker might generate to try to expose flows in your network stack.
-  # Take the SYN and FIN flags, for example. TCP SYN is used to request
-  # that a TCP connection be opened on a server; TCP FIN is used to
-  # terminate an existing connection. So,does it make any sense to send a
-  # packet that has both SYN and FIN set together?
-  #
-  # Not at all. These kinds of packets are "bogus", in that they use flag
-  # combinations which make no sense. However, some network implementations
-  # can be fooled into some strange behavior when such unexpected packets
-  # are received. The best defense, then, is just to reject them all.
-  # Here's how to restrict bogus packets using iptables:
-  iptables -A UI_INPUT -p tcp -m tcp --tcp-flags SYN,FIN SYN,FIN -j DROP
-  iptables -A UI_INPUT -p tcp -m tcp --tcp-flags SYN,RST SYN,RST -j DROP
-}
-
 _ui_source_all_update_iptables_files() {
   local directory="$UPDATE_IPTABLES_RULES_CFG_DIR"
   local file
@@ -490,7 +445,7 @@ _ui_init() {
   # Reset iptables chains
   for chain in UI_INPUT UI_OUTPUT UI_FORWARD; do
     _ui_log_title "FLUSH CHAIN: $chain"
-    if iptables_noecho -A "$chain"; then
+    if iptables -A "$chain" >/dev/null; then
       iptables -F "$chain" || true
       # Note: nat table support for IPv6 requires a newer kernel (3.7+)
       iptables -t nat -L -n &>/dev/null \
@@ -554,28 +509,6 @@ _ui_main() {
     || iptables -I FORWARD 1 -j UI_FORWARD
   ip6tables -C FORWARD -j UI_FORWARD 2>/dev/null \
     || ip6tables -I FORWARD 1 -j UI_FORWARD
-
-  # ACCEPT ESTABLISHED INPUT/OUTPUT
-  # --------------------------------
-  # Every packet that is received by any network interface will pass the INPUT
-  # chain fist, if it is destined for this machine. In this chain, we make sure
-  # that only the packets that we want are accepted.
-  #
-  # The first rule added to the INPUT chain will allow traffic that belongs to
-  # established connections, or new valid traffic that is related to these
-  # connections such as ICMP errors, or echo replies (the packets a host return
-  # when pinged).
-  #
-  # Some ICMP messages are very important and help manage congestion and MTU,
-  # and are accepted by this rule.
-  #
-  # The connection state ESTABLISHED implies that either another rule previously
-  # allowed the initial (--ctstate NEW) connection attempt or the connection was
-  # already active (for example an active remote SSH connection) when setting
-  # the rule below.
-  ui_46iptables -A UI_FORWARD -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
-  ui_46iptables -A UI_INPUT -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
-  ui_46iptables -A UI_OUTPUT -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
 
   _ui_log_title "MAIN RULES"
   if [[ -f "$UPDATE_IPTABLES_CFG_FILE" ]]; then
