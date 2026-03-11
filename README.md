@@ -48,8 +48,8 @@ sudo nano /etc/update-iptables.d/10-ssh.rules
 Add your `iptables` commands in the file. For example, to allow incoming SSH connections:
 
 ```bash
-iptables -A MY_INPUT -p tcp --dport 22 -m conntrack --ctstate NEW,ESTABLISHED -j ACCEPT
-iptables -A MY_OUTPUT -p tcp --sport 22 -m conntrack --ctstate ESTABLISHED -j ACCEPT
+iptables -A UI_INPUT -p tcp --dport 22 -m conntrack --ctstate NEW,ESTABLISHED -j ACCEPT
+iptables -A UI_OUTPUT -p tcp --sport 22 -m conntrack --ctstate ESTABLISHED -j ACCEPT
 ```
 
 Reload the firewall to apply the new rules:
@@ -70,7 +70,7 @@ The new rule will be integrated automatically, respecting the modular structure 
 
 * **IPv4 and IPv6 support**: Applies rules consistently to both `iptables` and `ip6tables`.
 
-* **Custom rule chains**: Introduces dedicated chains (`MY_INPUT`, `MY_OUTPUT`, `MY_FORWARD`, `MY_PREROUTING`, `MY_POSTROUTING`) to isolate managed rules from system chains.
+* **Custom rule chains**: Introduces dedicated chains (`UI_INPUT`, `UI_OUTPUT`, `UI_FORWARD`, `UI_PREROUTING`, `UI_POSTROUTING`) to isolate managed rules from system chains.
 
 * **NAT and routing support**: Provides helper functions for NAT and network routing, including masquerading and network bridging.
 
