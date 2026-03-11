@@ -52,8 +52,8 @@
 # shellcheck disable=SC1091
 set -euf -o pipefail
 
-FIRST_SUCCESSFUL_RUN_FILE="/var/run/update-iptables.first-run"
-UI_NETWORK_ZONE_FILE="/var/run/update-iptables.network-zone"
+FIRST_SUCCESSFUL_RUN_FILE="/run/update-iptables.first-run"
+UI_NETWORK_ZONE_FILE="/run/update-iptables.network-zone"
 IPTABLES_FILE_BEFORE="/etc/.update-iptables-rules-v4.before"
 IPTABLES_FILE_AFTER="/etc/.update-iptables-rules-v4.after"
 
@@ -95,7 +95,8 @@ iptables() {
     echo "[CMD] $*"
   fi
 
-  "$IPTABLES_CMD" "$@" || return "$?"
+  # -w: Add automatic xtables lock waiting.
+  "$IPTABLES_CMD" -w 5 "$@" || return "$?"
 
   return 0
 }
@@ -105,7 +106,8 @@ ip6tables() {
     echo "[CMD] $*"
   fi
 
-  "$IP6TABLES_CMD" "$@" || return "$?"
+  # -w: Add automatic xtables lock waiting.
+  "$IP6TABLES_CMD" -w 5 "$@" || return "$?"
 
   return 0
 }
@@ -193,7 +195,7 @@ allow_user_outgoing() {
   fi
 
   args+=("-m" "owner" "--uid-owner" "$user" "-j" "ACCEPT")
-  if grep -q "^${user}:" /etc/passwd; then
+  if id "$user" >/dev/null; then
     iptables "${args[@]}"
   fi
 }
@@ -204,8 +206,10 @@ allow_ping() {
   # packet will count as new, the others will be handled by the RELATED,
   # ESTABLISHED rule. Since the computer is not a router, no other ICMP with
   # state NEW needs to be allowed.
-  # DO NOT ACTIVATE IT.
   iptables -A UI_INPUT -p icmp --icmp-type 8 \
+    -m conntrack --ctstate NEW -j ACCEPT
+
+  ip6tables -A UI_INPUT -p ipv6-icmp --icmpv6-type 128 \
     -m conntrack --ctstate NEW -j ACCEPT
 }
 
@@ -244,12 +248,12 @@ enable_logging() {
 
     # Log the packet, then return to let standard routing handle it
     # cooperatively
-    iptables -A "LOGGING_$item" -m limit --limit 10/min -j LOG \
-      --log-prefix "[UPDATE-IPTABLES $item] " --log-level 4
+    iptables -A "LOGGING_$item" -m limit --limit 10/min --limit-burst 20 \
+      -j LOG --log-prefix "[UPDATE-IPTABLES $item] " --log-level 4
     iptables -A "LOGGING_$item" -j RETURN
 
-    ip6tables -A "LOGGING_$item" -m limit --limit 10/min -j LOG \
-      --log-prefix "[UPDATE-IP6TABLES $item] " --log-level 4
+    ip6tables -A "LOGGING_$item" -m limit --limit 10/min --limit-burst 20 \
+      -j LOG --log-prefix "[UPDATE-IP6TABLES $item] " --log-level 4
     ip6tables -A "LOGGING_$item" -j RETURN
   done
 }
@@ -358,7 +362,8 @@ drop_invalid() {
   ext_if=$(ip route show default | awk '/default/ {print $5}' | head -n 1) \
     || true
 
-  if [[ -n "$ext_if" ]]; then
+  # Ensure that the interface exists
+  if [[ -n "$ext_if" ]] && ip link show "$ext_if" &>/dev/null; then
     iptables -A UI_INPUT -i "$ext_if" -s 127.0.0.0/8 -j DROP
     iptables -A UI_INPUT -i "$ext_if" -s 10.0.0.0/8 -j DROP
     iptables -A UI_INPUT -i "$ext_if" -s 169.254.0.0/16 -j DROP
@@ -401,12 +406,13 @@ iptables_loopback() {
     # many applications and services.
     #
     iptables -A UI_INPUT -s 127.0.0.0/8 ! -i lo -j DROP
-    iptables -A UI_INPUT -i lo -j ACCEPT
     iptables -A UI_OUTPUT -d 127.0.0.0/8 ! -o lo -j DROP
 
     ip6tables -A UI_INPUT -s ::1/128 ! -i lo -j DROP
-    ip6tables -A UI_INPUT -i lo -j ACCEPT
     ip6tables -A UI_OUTPUT -d ::1/128 ! -o lo -j DROP
+
+    iptables -A UI_INPUT -i lo -j ACCEPT
+    ip6tables -A UI_INPUT -i lo -j ACCEPT
   fi
 }
 
@@ -477,7 +483,7 @@ source_all_update_iptables_files() {
   local file
 
   if [[ -d "$directory" ]]; then
-    find "$directory" -name '*.rules' -type f | sort | while read -r file; do
+    while IFS= read -r file; do
       if [[ -r "$file" ]]; then
         echo "[SOURCE] $file"
         # shellcheck disable=SC1090
@@ -485,7 +491,7 @@ source_all_update_iptables_files() {
       else
         echo "[IGNORED] Cannot read: $file"
       fi
-    done
+    done < <(find "$directory" -name '*.rules' -type f | sort)
   else
     echo "Directory $directory does not exist."
   fi
@@ -510,7 +516,7 @@ parse_args() {
         echo "-v    Enable verbose output for iptables commands"
         echo "-h    Show this help message and exit"
       } >&2
-      exit 1
+      exit 0
       ;;
     \?)
       echo "Invalid option: -$OPTARG" >&2
@@ -660,6 +666,26 @@ ui_default_policy() {
 main() {
   init "$@"
 
+  # Attach chains
+  iptables -C OUTPUT -j UI_OUTPUT 2>/dev/null \
+    || iptables -I OUTPUT 1 -j UI_OUTPUT
+  iptables -C INPUT -j UI_INPUT 2>/dev/null \
+    || iptables -I INPUT 1 -j UI_INPUT
+  ip6tables -C OUTPUT -j UI_OUTPUT 2>/dev/null \
+    || ip6tables -I OUTPUT 1 -j UI_OUTPUT
+  ip6tables -C INPUT -j UI_INPUT 2>/dev/null \
+    || ip6tables -I INPUT 1 -j UI_INPUT
+  # Add my postrouting to postrouting
+  iptables -t nat -C POSTROUTING -j UI_POSTROUTING 2>/dev/null \
+    || iptables -t nat -I POSTROUTING 1 -j UI_POSTROUTING
+  # Add my prerouting to prerouting
+  iptables -t nat -C PREROUTING -j UI_PREROUTING 2>/dev/null \
+    || iptables -t nat -I PREROUTING 1 -j UI_PREROUTING
+  iptables -C FORWARD -j UI_FORWARD 2>/dev/null \
+    || iptables -I FORWARD 1 -j UI_FORWARD
+  ip6tables -C FORWARD -j UI_FORWARD 2>/dev/null \
+    || ip6tables -I FORWARD 1 -j UI_FORWARD
+
   # ACCEPT ESTABLISHED INPUT/OUTPUT
   # --------------------------------
   # Every packet that is received by any network interface will pass the INPUT
@@ -680,11 +706,11 @@ main() {
   # the rule below.
   iptables -A UI_FORWARD -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
   iptables -A UI_INPUT -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
-  iptables -A UI_OUTPUT -m conntrack --ctstate ESTABLISHED -j ACCEPT
+  iptables -A UI_OUTPUT -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
 
   ip6tables -A UI_FORWARD -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
   ip6tables -A UI_INPUT -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
-  ip6tables -A UI_OUTPUT -m conntrack --ctstate ESTABLISHED -j ACCEPT
+  ip6tables -A UI_OUTPUT -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
 
   # Accept loopback traffic immediately after established connections
   iptables_loopback
@@ -700,25 +726,7 @@ main() {
 
   enable_logging
 
-  # Add chains to INPUT and OUTPUT safely, inserting at the top
-  iptables -C OUTPUT -j UI_OUTPUT 2>/dev/null \
-    || iptables -I OUTPUT 1 -j UI_OUTPUT
-  iptables -C INPUT -j UI_INPUT 2>/dev/null \
-    || iptables -I INPUT 1 -j UI_INPUT
-  ip6tables -C OUTPUT -j UI_OUTPUT 2>/dev/null \
-    || ip6tables -I OUTPUT 1 -j UI_OUTPUT
-  ip6tables -C INPUT -j UI_INPUT 2>/dev/null \
-    || ip6tables -I INPUT 1 -j UI_INPUT
-
   ui_default_policy
-
-  # Add my postrouting to postrouting
-  iptables -t nat -C POSTROUTING -j UI_POSTROUTING 2>/dev/null \
-    || iptables -t nat -I POSTROUTING 1 -j UI_POSTROUTING
-
-  # Add my prerouting to prerouting
-  iptables -t nat -C PREROUTING -j UI_PREROUTING 2>/dev/null \
-    || iptables -t nat -I PREROUTING 1 -j UI_PREROUTING
 
   atexit
 }
