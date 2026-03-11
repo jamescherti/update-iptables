@@ -94,8 +94,6 @@ The new rule will be integrated automatically, respecting the modular structure 
 
 * **Custom rule chains**: Introduces dedicated chains (`UI_INPUT`, `UI_OUTPUT`, `UI_FORWARD`, `UI_PREROUTING`, `UI_POSTROUTING`) to isolate managed rules from system chains.
 
-* **NAT and routing support**: Provides helper functions for NAT and network routing, including masquerading and network bridging.
-
 * **Per-user network policies**: Allows outgoing traffic to be restricted or permitted based on the Unix user ID using the `owner` module.
 
 * **Secure default policy**: Uses restrictive default policies (DROP) until rules are successfully applied.

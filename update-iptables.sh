@@ -88,33 +88,25 @@ _UI_LOOPBACK_DONE=0
 ui_allow_loopback() {
   if [[ $_UI_LOOPBACK_DONE -eq 0 ]]; then
     _UI_LOOPBACK_DONE=1
+
+    # ANTI-SPOOFING: Drop packets claiming to be loopback from outside If a
+    # packet claims to be from the loopback subnet/address, but it arrived on
+    # any interface other than 'lo', drop it immediately.
+    iptables -A UI_INPUT -s 127.0.0.0/8 ! -i lo -j DROP
+    ip6tables -A UI_INPUT -s ::1/128 ! -i lo -j DROP
+
+    # ANTI-POLLUTION: Prevent loopback traffic from leaving the machine This
+    # prevents accidentally routing packets destined for loopback out into the
+    # physical network, preventing routing loops.
+    iptables -A UI_OUTPUT -d 127.0.0.0/8 ! -o lo -j DROP
+    ip6tables -A UI_OUTPUT -d ::1/128 ! -o lo -j DROP
+
     # ACCEPT: LOOPBACK INPUT
-    #
-    # Accept traffic from the "loopback" interface, which is necessary for
-    # many applications and services.
-    #
-
-    # If a packet claims to be from the loopback subnet (127.0.0.0/8), but it
-    # arrived on any interface other than the actual loopback interface (! -i
-    # lo), drop it immediately.
-    # TODO fix
-    # iptables -A UI_INPUT -s 127.0.0.0/8 ! -i lo -j DROP
-    # ip6tables -A UI_INPUT -s ::1/128 ! -i lo -j DROP
-
-    # This prevents your machine from accidentally routing packets destined for
-    # loopback out into the physical network, which prevents routing loops and
-    # network pollution.
-    # TODO fix
-    # iptables -A UI_OUTPUT -d 127.0.0.0/8 ! -o lo -j DROP
-    # ip6tables -A UI_OUTPUT -d ::1/128 ! -o lo -j DROP
-
+    # Accept traffic from the "loopback" interface.
     ui_46iptables -A UI_INPUT -i lo -j ACCEPT
 
     # ACCEPT: LOOPBACK OUTPUT
-    #
-    # Accept the traffic from the "loopback" interface, which is necessary for
-    # many applications and services.
-    #
+    # Accept traffic to the "loopback" interface.
     ui_46iptables -A UI_OUTPUT -o lo -j ACCEPT
   fi
 }
