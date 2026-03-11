@@ -391,19 +391,23 @@ drop_invalid() {
   iptables -A UI_INPUT -p tcp -m tcp --tcp-flags SYN,RST SYN,RST -j DROP
 }
 
+_UI_LOOPBACK_DONE=0
 iptables_loopback() {
-  # ACCEPT: LOOPBACK INPUT
-  #
-  # Accept traffic from the "loopback" interface, which is necessary for
-  # many applications and services.
-  #
-  iptables -A UI_INPUT -s 127.0.0.0/8 ! -i lo -j DROP
-  iptables -A UI_INPUT -i lo -j ACCEPT
-  iptables -A UI_OUTPUT -d 127.0.0.0/8 ! -o lo -j DROP
+  if [[ $_UI_LOOPBACK_DONE -eq 0 ]]; then
+    _UI_LOOPBACK_DONE=1
+    # ACCEPT: LOOPBACK INPUT
+    #
+    # Accept traffic from the "loopback" interface, which is necessary for
+    # many applications and services.
+    #
+    iptables -A UI_INPUT -s 127.0.0.0/8 ! -i lo -j DROP
+    iptables -A UI_INPUT -i lo -j ACCEPT
+    iptables -A UI_OUTPUT -d 127.0.0.0/8 ! -o lo -j DROP
 
-  ip6tables -A UI_INPUT -s ::1/128 ! -i lo -j DROP
-  ip6tables -A UI_INPUT -i lo -j ACCEPT
-  ip6tables -A UI_OUTPUT -d ::1/128 ! -o lo -j DROP
+    ip6tables -A UI_INPUT -s ::1/128 ! -i lo -j DROP
+    ip6tables -A UI_INPUT -i lo -j ACCEPT
+    ip6tables -A UI_OUTPUT -d ::1/128 ! -o lo -j DROP
+  fi
 }
 
 # shellcheck disable=SC2120
