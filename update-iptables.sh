@@ -107,6 +107,13 @@ atexit() {
     if [[ $errno -ne 0 ]]; then
       echo >&2
       echo "ERROR with iptables!" >&2
+      echo "[INFO] Locking down policies to DROP due to failure." >&2
+      iptables -P FORWARD DROP
+      iptables -P INPUT DROP
+      iptables -P OUTPUT DROP
+      ip6tables -P FORWARD DROP
+      ip6tables -P INPUT DROP
+      ip6tables -P OUTPUT DROP
     else
       if [[ -n "$IPTABLES_FILE_AFTER" ]]; then
         echo "[SAVE] Rules saved to: $IPTABLES_FILE_AFTER"
@@ -195,7 +202,8 @@ attach_tcp_udp_input() {
   # UI_RESET by the next rule.
   #
   iptables -A MY_INPUT -p udp -m conntrack --ctstate NEW -j UDP
-  iptables -A MY_INPUT -p tcp --tcp-flags FIN,SYN,RST,ACK SYN -m conntrack --ctstate NEW -j TCP
+  iptables -A MY_INPUT -p tcp --tcp-flags FIN,SYN,RST,ACK SYN -m conntrack \
+    --ctstate NEW -j TCP
 }
 
 enable_logging() {
@@ -206,10 +214,13 @@ enable_logging() {
     iptables -F "LOGGING_$item"
 
     # Append the logging chain to the end of the main chain
-    iptables -C "$item" -j "LOGGING_$item" 2>/dev/null || iptables -A "$item" -j "LOGGING_$item"
+    iptables -C "$item" -j "LOGGING_$item" 2>/dev/null \
+      || iptables -A "$item" -j "LOGGING_$item"
 
-    # Log the packet, then return to let standard routing handle it cooperatively
-    iptables -A "LOGGING_$item" -m limit --limit 10/min -j LOG --log-prefix "[IPTABLES LOG $item] " --log-level 4
+    # Log the packet, then return to let standard routing handle it
+    # cooperatively
+    iptables -A "LOGGING_$item" -m limit --limit 10/min -j LOG \
+      --log-prefix "[IPTABLES LOG $item] " --log-level 4
     iptables -A "LOGGING_$item" -j RETURN
   done
 }
@@ -272,7 +283,8 @@ drop_invalid() {
   #         -A INPUT -p 41 -j ACCEPT
   local mode
   for mode in MY_INPUT MY_FORWARD MY_OUTPUT; do
-    iptables -A "$mode" -m conntrack --ctstate INVALID -m comment --comment "DROP invalid" -j DROP
+    iptables -A "$mode" -m conntrack --ctstate INVALID -m comment \
+      --comment "DROP invalid" -j DROP
   done
 
   # Reject packets from RFC1918 class networks (i.e., spoofed)
@@ -363,7 +375,8 @@ iptables_masquerade() {
   local in_cidr="$3"
   iptables -A MY_FORWARD -i "$in_nic" -o "$out_nic" -j ACCEPT
   iptables -t nat -A POSTROUTING -s "$in_cidr" -o "$out_nic" -j MASQUERADE
-  iptables -A MY_FORWARD -i "$out_nic" -o "$in_nic" -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
+  iptables -A MY_FORWARD -i "$out_nic" -o "$in_nic" -m conntrack \
+    --ctstate ESTABLISHED,RELATED -j ACCEPT
 }
 
 source_all_update_iptables_files() {
@@ -579,8 +592,10 @@ main() {
   enable_logging
 
   # Add chains to INPUT and OUTPUT safely, inserting at the top
-  iptables -C OUTPUT -j MY_OUTPUT 2>/dev/null || iptables -I OUTPUT 1 -j MY_OUTPUT
-  iptables -C INPUT -j MY_INPUT 2>/dev/null || iptables -I INPUT 1 -j MY_INPUT
+  iptables -C OUTPUT -j MY_OUTPUT 2>/dev/null \
+    || iptables -I OUTPUT 1 -j MY_OUTPUT
+  iptables -C INPUT -j MY_INPUT 2>/dev/null \
+    || iptables -I INPUT 1 -j MY_INPUT
 
   ui_default_policy
 
