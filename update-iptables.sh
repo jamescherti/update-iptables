@@ -72,7 +72,14 @@ ui_error_handler() {
   exit "${errno}"
 }
 
+_UI_FIRST_TITLE=1
 ui_log_title() {
+  if [[ $_UI_FIRST_TITLE -ne 0 ]]; then
+    _UI_FIRST_TITLE=0
+  else
+    echo
+  fi
+
   echo '========================================================='
   echo "$@"
   echo '========================================================='
