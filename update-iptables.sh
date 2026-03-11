@@ -472,6 +472,14 @@ ui_allow_loopback() {
 
     iptables -A UI_INPUT -i lo -j ACCEPT
     ip6tables -A UI_INPUT -i lo -j ACCEPT
+
+    # ACCEPT: LOOPBACK OUTPUT
+    #
+    # Accept the traffic from the "loopback" interface, which is necessary for
+    # many applications and services.
+    #
+    iptables -A UI_OUTPUT -o lo -j ACCEPT
+    ip6tables -A UI_OUTPUT -o lo -j ACCEPT
   fi
 }
 
@@ -487,13 +495,6 @@ iptables_accept_localhost() {
         iptables -A UI_OUTPUT -o lo -m owner --uid-owner "$cur_user" -j ACCEPT
       fi
     done
-  else
-    # ACCEPT: LOOPBACK OUTPUT
-    #
-    # Accept the traffic from the "loopback" interface, which is necessary for
-    # many applications and services.
-    #
-    iptables -A UI_OUTPUT -o lo -j ACCEPT
   fi
 }
 
