@@ -72,7 +72,6 @@ ui_allow_users_output systemd-timesync sockd proxy root alpm
 
 # SSH
 iptables -A UI_INPUT -p tcp --dport 22 -m conntrack --ctstate NEW,ESTABLISHED -j ACCEPT
-iptables -A UI_OUTPUT -p tcp --sport 22 -m conntrack --ctstate ESTABLISHED -j ACCEPT
 ```
 
 Reload the firewall to apply the new rules:
