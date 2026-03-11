@@ -571,8 +571,6 @@ init() {
 
   trap 'atexit' INT TERM EXIT QUIT
 
-  set -x
-
   # Reset iptables chains
   for chain in MY_INPUT MY_OUTPUT MY_FORWARD; do
     # Handle IPv4
