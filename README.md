@@ -10,7 +10,7 @@ This low-level firewall script is intended for Linux system administrators who r
 ## Requirements
 
 - `bash`
-- iptables (`iptables` and `ip6tables`)
+- iptables (`iptables`, `ip6tables`, and `iptables-save`)
 - Optional: `diff` and `cmp`
 
 ## Installation
