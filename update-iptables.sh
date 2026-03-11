@@ -54,8 +54,8 @@ set -euf -o pipefail
 
 FIRST_SUCCESSFUL_RUN_FILE="/var/run/update-iptables.first-run"
 UI_NETWORK_ZONE_FILE="/var/run/update-iptables.network-zone"
-IPTABLES_FILE_AFTER="/etc/.update-iptables-rules-v4.after"
 IPTABLES_FILE_BEFORE="/etc/.update-iptables-rules-v4.before"
+IPTABLES_FILE_AFTER="/etc/.update-iptables-rules-v4.after"
 
 UPDATE_IPTABLES_CFG_FILE="/etc/update-iptables.rules"
 UPDATE_IPTABLES_RULES_CFG_DIR="/etc/update-iptables.d"
@@ -137,22 +137,16 @@ atexit() {
     else
       if [[ -n "$IPTABLES_FILE_AFTER" ]]; then
         echo "[SAVE] Rules saved to: $IPTABLES_FILE_AFTER"
+        touch "$IPTABLES_FILE_AFTER"
+        chmod 600 "$IPTABLES_FILE_AFTER"
         if type -P iptables-save &>/dev/null; then
           iptables-save >"$IPTABLES_FILE_AFTER"
         else
           echo >"$IPTABLES_FILE_AFTER"
         fi
-
-        chmod 600 "$IPTABLES_FILE_AFTER"
       fi
 
       if [[ -n "$IPTABLES_FILE_BEFORE" ]]; then
-        if type -P iptables-save &>/dev/null; then
-          iptables-save >"$IPTABLES_FILE_BEFORE"
-        else
-          echo >"$IPTABLES_FILE_BEFORE"
-        fi
-
         if cmp -s "$IPTABLES_FILE_AFTER" "$IPTABLES_FILE_BEFORE"; then
           echo "[INFO] Nothing has changed."
         elif type -P diff &>/dev/null && [[ -n "$IPTABLES_FILE_AFTER" ]]; then
@@ -176,7 +170,7 @@ atexit() {
 # shellcheck disable=SC2329
 allow_user_outgoing() {
   local args=()
-  args=("-A" "MY_OUTPUT")
+  args=("-A" "UI_OUTPUT")
 
   local user="$1"
 
@@ -205,7 +199,7 @@ allow_ping() {
   # ESTABLISHED rule. Since the computer is not a router, no other ICMP with
   # state NEW needs to be allowed.
   # DO NOT ACTIVATE IT.
-  iptables -A MY_INPUT -p icmp --icmp-type 8 -m conntrack --ctstate NEW -j ACCEPT
+  iptables -A UI_INPUT -p icmp --icmp-type 8 -m conntrack --ctstate NEW -j ACCEPT
 }
 
 # shellcheck disable=SC2329
@@ -221,14 +215,14 @@ attach_tcp_udp_input() {
   # should not just be dropped. Instead, they are simply rejected with a TCP
   # UI_RESET by the next rule.
   #
-  iptables -A MY_INPUT -p udp -m conntrack --ctstate NEW -j UDP
-  iptables -A MY_INPUT -p tcp --tcp-flags FIN,SYN,RST,ACK SYN -m conntrack \
+  iptables -A UI_INPUT -p udp -m conntrack --ctstate NEW -j UDP
+  iptables -A UI_INPUT -p tcp --tcp-flags FIN,SYN,RST,ACK SYN -m conntrack \
     --ctstate NEW -j TCP
 }
 
 enable_logging() {
   local item
-  for item in MY_INPUT MY_OUTPUT MY_FORWARD; do
+  for item in UI_INPUT UI_OUTPUT UI_FORWARD; do
     # Safely create and flush the logging chain
     iptables -N "LOGGING_$item" 2>/dev/null || true
     iptables -F "LOGGING_$item"
@@ -251,11 +245,11 @@ bridge_internet() {
   local cidr="$1"
 
   iptables -t nat -A POSTROUTING -s "$cidr" ! -d "$cidr" -j MASQUERADE
-  iptables -A MY_FORWARD -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT
+  iptables -A UI_FORWARD -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT
 
-  iptables -A MY_FORWARD -s "$cidr" -j ACCEPT
-  iptables -A MY_FORWARD -d "$cidr" -j ACCEPT
-  iptables -A MY_OUTPUT -d "$cidr" -j ACCEPT
+  iptables -A UI_FORWARD -s "$cidr" -j ACCEPT
+  iptables -A UI_FORWARD -d "$cidr" -j ACCEPT
+  iptables -A UI_OUTPUT -d "$cidr" -j ACCEPT
 }
 
 # TODO Since the script includes NAT/Routing functions (bridge_internet and
@@ -274,11 +268,11 @@ bridge_internet() {
 #   iptables -t mangle -A FORWARD -p tcp --tcp-flags SYN,RST SYN \
 #     -j TCPMSS --clamp-mss-to-pmtu
 #
-#   iptables -A MY_FORWARD -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT
+#   iptables -A UI_FORWARD -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT
 #
-#   iptables -A MY_FORWARD -s "$cidr" -j ACCEPT
-#   iptables -A MY_FORWARD -d "$cidr" -j ACCEPT
-#   iptables -A MY_OUTPUT -d "$cidr" -j ACCEPT
+#   iptables -A UI_FORWARD -s "$cidr" -j ACCEPT
+#   iptables -A UI_FORWARD -d "$cidr" -j ACCEPT
+#   iptables -A UI_OUTPUT -d "$cidr" -j ACCEPT
 # }
 
 # shellcheck disable=SC2329
@@ -289,15 +283,15 @@ bridge_localnet() {
   local interface="$1"
   shift
 
-  iptables -A MY_FORWARD -d "$cidr" -o "$interface" -j ACCEPT
-  iptables -A MY_FORWARD -s "$cidr" -i "$interface" -j ACCEPT
+  iptables -A UI_FORWARD -d "$cidr" -o "$interface" -j ACCEPT
+  iptables -A UI_FORWARD -s "$cidr" -i "$interface" -j ACCEPT
 
   # allow traffic between virtual machines TODO: needed?
-  iptables -A MY_FORWARD -i "$interface" -o "$interface" -j ACCEPT
-  iptables -A MY_OUTPUT -d "$cidr" -o "$interface" -j ACCEPT
+  iptables -A UI_FORWARD -i "$interface" -o "$interface" -j ACCEPT
+  iptables -A UI_OUTPUT -d "$cidr" -o "$interface" -j ACCEPT
 
   while [[ $# -gt 0 ]]; do
-    iptables -A MY_FORWARD -s "$cidr" -i "$interface" -d "$1" -j ACCEPT
+    iptables -A UI_FORWARD -s "$cidr" -i "$interface" -d "$1" -j ACCEPT
     shift
   done
 }
@@ -325,7 +319,7 @@ drop_invalid() {
   #         like. Keep this in mind, and accept them before this rule: iptables
   #         -A INPUT -p 41 -j ACCEPT
   local mode
-  for mode in MY_INPUT MY_FORWARD MY_OUTPUT; do
+  for mode in UI_INPUT UI_FORWARD UI_OUTPUT; do
     iptables -A "$mode" -m conntrack --ctstate INVALID -m comment \
       --comment "DROP invalid" -j DROP
   done
@@ -348,19 +342,19 @@ drop_invalid() {
     || true
 
   if [[ -n "$ext_if" ]]; then
-    iptables -A MY_INPUT -i "$ext_if" -s 127.0.0.0/8 -j DROP
-    iptables -A MY_INPUT -i "$ext_if" -s 10.0.0.0/8 -j DROP
-    iptables -A MY_INPUT -i "$ext_if" -s 169.254.0.0/16 -j DROP
-    iptables -A MY_INPUT -i "$ext_if" -s 172.16.0.0/12 -j DROP
-    iptables -A MY_INPUT -i "$ext_if" -s 192.168.0.0/16 -j DROP
-    iptables -A MY_INPUT -i "$ext_if" -s 224.0.0.0/4 -j DROP
-    iptables -A MY_INPUT -i "$ext_if" -d 224.0.0.0/4 -j DROP
-    iptables -A MY_INPUT -i "$ext_if" -s 240.0.0.0/5 -j DROP
-    iptables -A MY_INPUT -i "$ext_if" -d 240.0.0.0/5 -j DROP
-    iptables -A MY_INPUT -i "$ext_if" -s 0.0.0.0/8 -j DROP
-    iptables -A MY_INPUT -i "$ext_if" -d 0.0.0.0/8 -j DROP
-    iptables -A MY_INPUT -i "$ext_if" -d 239.255.255.0/24 -j DROP
-    iptables -A MY_INPUT -i "$ext_if" -d 255.255.255.255 -j DROP
+    iptables -A UI_INPUT -i "$ext_if" -s 127.0.0.0/8 -j DROP
+    iptables -A UI_INPUT -i "$ext_if" -s 10.0.0.0/8 -j DROP
+    iptables -A UI_INPUT -i "$ext_if" -s 169.254.0.0/16 -j DROP
+    iptables -A UI_INPUT -i "$ext_if" -s 172.16.0.0/12 -j DROP
+    iptables -A UI_INPUT -i "$ext_if" -s 192.168.0.0/16 -j DROP
+    iptables -A UI_INPUT -i "$ext_if" -s 224.0.0.0/4 -j DROP
+    iptables -A UI_INPUT -i "$ext_if" -d 224.0.0.0/4 -j DROP
+    iptables -A UI_INPUT -i "$ext_if" -s 240.0.0.0/5 -j DROP
+    iptables -A UI_INPUT -i "$ext_if" -d 240.0.0.0/5 -j DROP
+    iptables -A UI_INPUT -i "$ext_if" -s 0.0.0.0/8 -j DROP
+    iptables -A UI_INPUT -i "$ext_if" -d 0.0.0.0/8 -j DROP
+    iptables -A UI_INPUT -i "$ext_if" -d 239.255.255.0/24 -j DROP
+    iptables -A UI_INPUT -i "$ext_if" -d 255.255.255.255 -j DROP
   fi
 
   # Drop bogus TCP packets
@@ -376,8 +370,8 @@ drop_invalid() {
   # can be fooled into some strange behavior when such unexpected packets
   # are received. The best defense, then, is just to reject them all.
   # Here's how to restrict bogus packets using iptables:
-  iptables -A MY_INPUT -p tcp -m tcp --tcp-flags SYN,FIN SYN,FIN -j DROP
-  iptables -A MY_INPUT -p tcp -m tcp --tcp-flags SYN,RST SYN,RST -j DROP
+  iptables -A UI_INPUT -p tcp -m tcp --tcp-flags SYN,FIN SYN,FIN -j DROP
+  iptables -A UI_INPUT -p tcp -m tcp --tcp-flags SYN,RST SYN,RST -j DROP
 }
 
 # shellcheck disable=SC2329
@@ -387,15 +381,15 @@ iptables_accept_localhost() {
   # Accept traffic from the "loopback" interface, which is necessary for
   # many applications and services.
   #
-  iptables -A MY_INPUT -s 127.0.0.0/8 ! -i lo -j DROP
-  iptables -A MY_INPUT -i lo -j ACCEPT
-  iptables -A MY_OUTPUT -d 127.0.0.0/8 ! -o lo -j DROP
+  iptables -A UI_INPUT -s 127.0.0.0/8 ! -i lo -j DROP
+  iptables -A UI_INPUT -i lo -j ACCEPT
+  iptables -A UI_OUTPUT -d 127.0.0.0/8 ! -o lo -j DROP
 
   if [[ $# -gt 0 ]]; then
     local cur_user
     for cur_user in "$@"; do
       if id "$cur_user" &>/dev/null; then
-        iptables -A MY_OUTPUT -o lo -m owner --uid-owner "$cur_user" -j ACCEPT
+        iptables -A UI_OUTPUT -o lo -m owner --uid-owner "$cur_user" -j ACCEPT
       fi
     done
   else
@@ -404,7 +398,7 @@ iptables_accept_localhost() {
     # Accept the traffic from the "loopback" interface, which is necessary for
     # many applications and services.
     #
-    iptables -A MY_OUTPUT -o lo -j ACCEPT
+    iptables -A UI_OUTPUT -o lo -j ACCEPT
   fi
 }
 
@@ -413,7 +407,7 @@ iptables_accept_output_users() {
   local cur_user
   for cur_user in "$@"; do
     if id "$cur_user" &>/dev/null; then
-      iptables -A MY_OUTPUT -m owner --uid-owner "$cur_user" -j ACCEPT
+      iptables -A UI_OUTPUT -m owner --uid-owner "$cur_user" -j ACCEPT
     fi
   done
 }
@@ -423,9 +417,9 @@ iptables_masquerade() {
   local out_nic="$1"
   local in_nic="$2"
   local in_cidr="$3"
-  iptables -A MY_FORWARD -i "$in_nic" -o "$out_nic" -j ACCEPT
+  iptables -A UI_FORWARD -i "$in_nic" -o "$out_nic" -j ACCEPT
   iptables -t nat -A POSTROUTING -s "$in_cidr" -o "$out_nic" -j MASQUERADE
-  iptables -A MY_FORWARD -i "$out_nic" -o "$in_nic" -m conntrack \
+  iptables -A UI_FORWARD -i "$out_nic" -o "$in_nic" -m conntrack \
     --ctstate ESTABLISHED,RELATED -j ACCEPT
 }
 
@@ -439,12 +433,12 @@ iptables_masquerade() {
 #   local out_nic="$1"
 #   local in_nic="$2"
 #   local in_cidr="$3"
-#   iptables -A MY_FORWARD -i "$in_nic" -o "$out_nic" -j ACCEPT
+#   iptables -A UI_FORWARD -i "$in_nic" -o "$out_nic" -j ACCEPT
 #   iptables -t nat -A POSTROUTING -s "$in_cidr" -o "$out_nic" -j MASQUERADE
 #   # Prevent MTU black holes
 #   iptables -t mangle -A FORWARD -p tcp --tcp-flags SYN,RST SYN -j TCPMSS --clamp-mss-to-pmtu
 #
-#   iptables -A MY_FORWARD -i "$out_nic" -o "$in_nic" -m conntrack \
+#   iptables -A UI_FORWARD -i "$out_nic" -o "$in_nic" -m conntrack \
 #     --ctstate ESTABLISHED,RELATED -j ACCEPT
 # }
 
@@ -523,7 +517,8 @@ init() {
   if [[ $UI_RESET -eq 0 ]]; then
     echo "$UI_NETWORK_ZONE" >"$UI_NETWORK_ZONE_FILE"
     rm -f "$FIRST_SUCCESSFUL_RUN_FILE"
-    echo >"$IPTABLES_FILE_BEFORE"
+    # TODO add this back?
+    # echo >"$IPTABLES_FILE_BEFORE"
   else
     if [[ -f "$UI_NETWORK_ZONE_FILE" ]]; then
       UI_NETWORK_ZONE=$(head -n 1 "$UI_NETWORK_ZONE_FILE")
@@ -533,7 +528,7 @@ init() {
   # Arg: flush
   if [[ $# -gt 0 ]] && [[ $1 == "flush" ]]; then
     # flush (delete) only managed chains cooperatively
-    for chain in MY_INPUT MY_OUTPUT MY_FORWARD MY_PREROUTING MY_POSTROUTING; do
+    for chain in UI_INPUT UI_OUTPUT UI_FORWARD UI_PREROUTING UI_POSTROUTING; do
       iptables -F "$chain" 2>/dev/null || true
       iptables -t nat -F "$chain" 2>/dev/null || true
       ip6tables -F "$chain" 2>/dev/null || true
@@ -569,6 +564,8 @@ init() {
   fi
 
   if [[ $IPTABLES_FILE_BEFORE != "" ]]; then
+    touch "$IPTABLES_FILE_BEFORE"
+    chmod 600 "$IPTABLES_FILE_BEFORE"
     if type -P iptables-save &>/dev/null; then
       iptables-save >"$IPTABLES_FILE_BEFORE"
     else
@@ -579,7 +576,7 @@ init() {
   trap 'atexit' INT TERM EXIT QUIT
 
   # Reset iptables chains
-  for chain in MY_INPUT MY_OUTPUT MY_FORWARD; do
+  for chain in UI_INPUT UI_OUTPUT UI_FORWARD; do
     # Handle IPv4
     ui_log_title "FLUSH IPv4 CHAIN: $chain"
     if iptables_noecho -A "$chain"; then
@@ -611,11 +608,11 @@ ui_default_policy() {
   ui_log_title "DEFAULT POLICY"
 
   # Always ensure NAT chains exist
-  iptables -t nat -F "MY_PREROUTING" &>/dev/null || true
-  iptables -t nat -N "MY_PREROUTING" &>/dev/null || true
+  iptables -t nat -F "UI_PREROUTING" &>/dev/null || true
+  iptables -t nat -N "UI_PREROUTING" &>/dev/null || true
 
-  iptables -t nat -F "MY_POSTROUTING" &>/dev/null || true
-  iptables -t nat -N "MY_POSTROUTING" &>/dev/null || true
+  iptables -t nat -F "UI_POSTROUTING" &>/dev/null || true
+  iptables -t nat -N "UI_POSTROUTING" &>/dev/null || true
 
   if ! [[ -f "$FIRST_SUCCESSFUL_RUN_FILE" ]]; then
     iptables -P FORWARD DROP
@@ -650,15 +647,15 @@ main() {
   # allowed the initial (--ctstate NEW) connection attempt or the connection was
   # already active (for example an active remote SSH connection) when setting
   # the rule below.
-  iptables -A MY_FORWARD -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
-  iptables -A MY_INPUT -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
-  iptables -A MY_OUTPUT -m conntrack --ctstate ESTABLISHED -j ACCEPT
+  iptables -A UI_FORWARD -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
+  iptables -A UI_INPUT -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
+  iptables -A UI_OUTPUT -m conntrack --ctstate ESTABLISHED -j ACCEPT
 
   # Accept loopback traffic immediately after established connections
   # Default config for: iptables_accept_localhost
-  iptables -A MY_INPUT -s 127.0.0.0/8 ! -i lo -j DROP
-  iptables -A MY_INPUT -i lo -j ACCEPT
-  iptables -A MY_OUTPUT -d 127.0.0.0/8 ! -o lo -j DROP
+  iptables -A UI_INPUT -s 127.0.0.0/8 ! -i lo -j DROP
+  iptables -A UI_INPUT -i lo -j ACCEPT
+  iptables -A UI_OUTPUT -d 127.0.0.0/8 ! -o lo -j DROP
 
   drop_invalid
 
@@ -673,20 +670,20 @@ main() {
   enable_logging
 
   # Add chains to INPUT and OUTPUT safely, inserting at the top
-  iptables -C OUTPUT -j MY_OUTPUT 2>/dev/null \
-    || iptables -I OUTPUT 1 -j MY_OUTPUT
-  iptables -C INPUT -j MY_INPUT 2>/dev/null \
-    || iptables -I INPUT 1 -j MY_INPUT
+  iptables -C OUTPUT -j UI_OUTPUT 2>/dev/null \
+    || iptables -I OUTPUT 1 -j UI_OUTPUT
+  iptables -C INPUT -j UI_INPUT 2>/dev/null \
+    || iptables -I INPUT 1 -j UI_INPUT
 
   ui_default_policy
 
   # Add my postrouting to postrouting
-  iptables -t nat -C POSTROUTING -j MY_POSTROUTING 2>/dev/null \
-    || iptables -t nat -I POSTROUTING 1 -j MY_POSTROUTING
+  iptables -t nat -C POSTROUTING -j UI_POSTROUTING 2>/dev/null \
+    || iptables -t nat -I POSTROUTING 1 -j UI_POSTROUTING
 
   # Add my prerouting to prerouting
-  iptables -t nat -C PREROUTING -j MY_PREROUTING 2>/dev/null \
-    || iptables -t nat -I PREROUTING 1 -j MY_PREROUTING
+  iptables -t nat -C PREROUTING -j UI_PREROUTING 2>/dev/null \
+    || iptables -t nat -I PREROUTING 1 -j UI_PREROUTING
 
   atexit
 }
