@@ -476,26 +476,6 @@ _ui_init() {
       ip6tables -N "$chain"
     fi
   done
-}
-
-_ui_default_policy() {
-  _ui_log_title "DEFAULT POLICY"
-
-  # Always ensure NAT chains exist
-  # TODO Check if prerouting and postrouting exist?
-  iptables -t nat -F UI_PREROUTING &>/dev/null || true
-  iptables -t nat -N UI_PREROUTING &>/dev/null || true
-
-  iptables -t nat -F UI_POSTROUTING &>/dev/null || true
-  iptables -t nat -N UI_POSTROUTING &>/dev/null || true
-
-  ui_46iptables -P FORWARD DROP
-  ui_46iptables -P INPUT DROP
-  ui_46iptables -P OUTPUT DROP
-}
-
-_ui_main() {
-  _ui_init "$@"
 
   # Attach chains
   iptables -C OUTPUT -j UI_OUTPUT 2>/dev/null \
@@ -518,6 +498,27 @@ _ui_main() {
     || iptables -I FORWARD 1 -j UI_FORWARD
   ip6tables -C FORWARD -j UI_FORWARD 2>/dev/null \
     || ip6tables -I FORWARD 1 -j UI_FORWARD
+
+}
+
+_ui_default_policy() {
+  _ui_log_title "DEFAULT POLICY"
+
+  # Always ensure NAT chains exist
+  # TODO Check if prerouting and postrouting exist?
+  iptables -t nat -F UI_PREROUTING &>/dev/null || true
+  iptables -t nat -N UI_PREROUTING &>/dev/null || true
+
+  iptables -t nat -F UI_POSTROUTING &>/dev/null || true
+  iptables -t nat -N UI_POSTROUTING &>/dev/null || true
+
+  ui_46iptables -P FORWARD DROP
+  ui_46iptables -P INPUT DROP
+  ui_46iptables -P OUTPUT DROP
+}
+
+_ui_main() {
+  _ui_init "$@"
 
   _ui_default_policy
 
