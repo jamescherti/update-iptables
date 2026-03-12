@@ -145,10 +145,12 @@ allow_loopback() {
 allow_ping() {
   iptables -A UI_INPUT -p icmp --icmp-type 8 \
     -m conntrack --ctstate NEW \
+    -m limit --limit 2/sec --limit-burst 5 \
     -m comment --comment "Accept IPv4 ping" -j ACCEPT
 
   ip6tables -A UI_INPUT -p ipv6-icmp --icmpv6-type 128 \
     -m conntrack --ctstate NEW \
+    -m limit --limit 2/sec --limit-burst 5 \
     -m comment --comment "Accept IPv6 ping" -j ACCEPT
 }
 
@@ -443,6 +445,7 @@ _ui_init() {
     for chain in UI_INPUT UI_OUTPUT UI_FORWARD UI_PREROUTING UI_POSTROUTING; do
       ui_46iptables -F "$chain" 2>/dev/null || true
       iptables -t nat -F "$chain" 2>/dev/null || true
+      ip6tables -t nat -F "$chain" 2>/dev/null || true
     done
 
     echo "Success: iptables custom rules flushed successfully."
@@ -520,6 +523,13 @@ _ui_init() {
   iptables -t nat -F UI_POSTROUTING &>/dev/null || true
   iptables -t nat -N UI_POSTROUTING &>/dev/null || true
 
+  if ip6tables -t nat -L -n &>/dev/null; then
+    ip6tables -t nat -F UI_PREROUTING &>/dev/null || true
+    ip6tables -t nat -N UI_PREROUTING &>/dev/null || true
+    ip6tables -t nat -F UI_POSTROUTING &>/dev/null || true
+    ip6tables -t nat -N UI_POSTROUTING &>/dev/null || true
+  fi
+
   # Attach chains
   if ! iptables -C OUTPUT -j UI_OUTPUT 2>/dev/null; then
     iptables -I OUTPUT 1 -j UI_OUTPUT
@@ -542,6 +552,12 @@ _ui_init() {
   # Add my prerouting to prerouting
   if ! iptables -t nat -C PREROUTING -j UI_PREROUTING 2>/dev/null; then
     iptables -t nat -I PREROUTING 1 -j UI_PREROUTING
+  fi
+
+  if ip6tables -t nat -L -n &>/dev/null; then
+    if ! ip6tables -t nat -C PREROUTING -j UI_PREROUTING 2>/dev/null; then
+      ip6tables -t nat -I PREROUTING 1 -j UI_PREROUTING
+    fi
   fi
 
   if ! iptables -C FORWARD -j UI_FORWARD 2>/dev/null; then
