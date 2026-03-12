@@ -340,7 +340,7 @@ _ui_source_all_update_iptables_files() {
   if [[ -d "$directory" ]]; then
     while IFS= read -r file; do
       if [[ -r "$file" ]]; then
-        _ui_log_title "[RULES] $UPDATE_IPTABLES_CFG_FILE"
+        _ui_log_title "[RULES] $file"
         # shellcheck disable=SC1090
         source "$file"
       else
@@ -459,31 +459,32 @@ _ui_init() {
   trap '_ui_atexit' INT TERM EXIT QUIT
 
   # Reset iptables chains
+  #
+  # NOTE: -n: prevents iptables from hanging on reverse DNS lookups (missing the
+  # -n flag). This will freeze your terminal if the network is down.
   for chain in UI_INPUT UI_OUTPUT UI_FORWARD; do
     _ui_log_title "FLUSH CHAIN: $chain"
-    if iptables -L "$chain" &>/dev/null; then
+    if iptables -L "$chain" -n &>/dev/null; then
       iptables -F "$chain" || true
-      # Note: nat table support for IPv6 requires a newer kernel (3.7+)
-      if iptables -t nat -L &>/dev/null; then
+      if iptables -t nat -L -n &>/dev/null; then
         iptables -t nat -F "$chain" || true
       fi
 
-      if iptables -t mangle -L &>/dev/null; then
+      if iptables -t mangle -L -n &>/dev/null; then
         iptables -t mangle -F "$chain" || true
       fi
     else
-      # Create the chain
       iptables -N "$chain" || true
     fi
 
     _ui_log_title "FLUSH IPv6 CHAIN: $chain"
-    if "$IP6TABLES_CMD" -L "$chain" &>/dev/null; then
-      # Note: nat table support for IPv6 requires a newer kernel (3.7+)
-      if ip6tables -t nat -L &>/dev/null; then
+    if "$IP6TABLES_CMD" -L "$chain" -n &>/dev/null; then
+      ip6tables -F "$chain" || true
+      if ip6tables -t nat -L -n &>/dev/null; then
         ip6tables -t nat -F "$chain" || true
       fi
 
-      if ip6tables -t mangle -L &>/dev/null; then
+      if ip6tables -t mangle -L -n &>/dev/null; then
         ip6tables -t mangle -F "$chain" || true
       fi
     else
@@ -518,7 +519,7 @@ _ui_init() {
   fi
 
   # Add my prerouting to prerouting
-  if ! iptables -t nat -C PREROUTING -j UI_POSTROUTING 2>/dev/null; then
+  if ! iptables -t nat -C PREROUTING -j UI_PREROUTING 2>/dev/null; then
     iptables -t nat -I PREROUTING 1 -j UI_PREROUTING
   fi
 
