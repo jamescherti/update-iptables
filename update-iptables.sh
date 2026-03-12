@@ -483,49 +483,48 @@ _ui_init() {
     fi
   done
 
+  # Create the chains
+  # TODO Check if prerouting and postrouting exist?
+  iptables -t nat -F UI_PREROUTING &>/dev/null || true
+  iptables -t nat -N UI_PREROUTING &>/dev/null || true
+  iptables -t nat -F UI_POSTROUTING &>/dev/null || true
+  iptables -t nat -N UI_POSTROUTING &>/dev/null || true
+
   # Attach chains
-  if iptables -C OUTPUT -j UI_OUTPUT 2>/dev/null; then
+  if ! iptables -C OUTPUT -j UI_OUTPUT 2>/dev/null; then
     iptables -I OUTPUT 1 -j UI_OUTPUT
   fi
-  if iptables -C INPUT -j UI_INPUT 2>/dev/null; then
+  if ! iptables -C INPUT -j UI_INPUT 2>/dev/null; then
     iptables -I INPUT 1 -j UI_INPUT
   fi
-  if ip6tables -C OUTPUT -j UI_OUTPUT 2>/dev/null; then
+  if ! ip6tables -C OUTPUT -j UI_OUTPUT 2>/dev/null; then
     ip6tables -I OUTPUT 1 -j UI_OUTPUT
   fi
-  if ip6tables -C INPUT -j UI_INPUT 2>/dev/null; then
+  if ! ip6tables -C INPUT -j UI_INPUT 2>/dev/null; then
     ip6tables -I INPUT 1 -j UI_INPUT
   fi
 
   # Add my postrouting to postrouting
-  if iptables -t nat -C POSTROUTING -j UI_POSTROUTING 2>/dev/null; then
+  if ! iptables -t nat -C POSTROUTING -j UI_POSTROUTING 2>/dev/null; then
     iptables -t nat -I POSTROUTING 1 -j UI_POSTROUTING
   fi
 
   # Add my prerouting to prerouting
-  if iptables -t nat -C PREROUTING -j UI_PREROUTING 2>/dev/null; then
+  if ! iptables -t nat -C PREROUTING -j UI_POSTROUTING 2>/dev/null; then
     iptables -t nat -I PREROUTING 1 -j UI_PREROUTING
   fi
 
-  if iptables -C FORWARD -j UI_FORWARD 2>/dev/null; then
+  if ! iptables -C FORWARD -j UI_FORWARD 2>/dev/null; then
     iptables -I FORWARD 1 -j UI_FORWARD
   fi
 
-  if ip6tables -C FORWARD -j UI_FORWARD 2>/dev/null; then
+  if ! ip6tables -C FORWARD -j UI_FORWARD 2>/dev/null; then
     ip6tables -I FORWARD 1 -j UI_FORWARD
   fi
 }
 
 _ui_default_policy() {
   _ui_log_title "DEFAULT POLICY"
-
-  # Always ensure NAT chains exist
-  # TODO Check if prerouting and postrouting exist?
-  iptables -t nat -F UI_PREROUTING &>/dev/null || true
-  iptables -t nat -N UI_PREROUTING &>/dev/null || true
-
-  iptables -t nat -F UI_POSTROUTING &>/dev/null || true
-  iptables -t nat -N UI_POSTROUTING &>/dev/null || true
 
   ui_46iptables -P FORWARD DROP
   ui_46iptables -P INPUT DROP
