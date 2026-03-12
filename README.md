@@ -53,28 +53,28 @@ Add your `iptables` commands in the file. For example:
 # connection has been permitted by a specific rule, all subsequent packets for
 # that session are processed quickly and efficiently without re-evaluating the
 # entire rule set.
-ui_allow_established
+allow_established
 
 # Allow all legitimate internal traffic on the 'lo' interface,
 # which is required for local applications and services to communicate.
 # This function also drops packets on non-loopback interfaces that spoof loopback
 # IP addresses (127.0.0.0/8 and ::1/128) to protect the system from
 # external manipulation and network pollution.
-ui_allow_loopback
+allow_loopback
 
 # This function establishes defensive firewall rules to drop malformed, spoofed,
 # and invalid network packets.
-ui_drop_invalid
+drop_invalid
 
 # Accept all incoming ICMP echo requests, also known as pings. Only the first
 # packet will count as new, the others will be handled by the RELATED,
 # ESTABLISHED rule. Since the computer is not a router, no other ICMP with
 # state NEW needs to be allowed.
-ui_allow_ping
+allow_ping
 
 # Permit outbound network traffic for a specific list of local system users.
 # (Usernames that do not exist on the host are silently ignored.)
-ui_allow_users_output systemd-timesync sockd proxy root alpm
+allow_users_output systemd-timesync sockd proxy root alpm
 
 # SSH
 iptables -A UI_INPUT -p tcp --dport 22 -m conntrack --ctstate NEW,ESTABLISHED -j ACCEPT

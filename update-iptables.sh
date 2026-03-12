@@ -68,7 +68,7 @@ VERBOSE=1
 # connection has been permitted by a specific rule, all subsequent packets for
 # that session are processed quickly and efficiently without re-evaluating the
 # entire rule set. shellcheck disable=SC2329
-ui_allow_established() {
+allow_established() {
   ui_46iptables \
     -A UI_FORWARD -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
   ui_46iptables \
@@ -84,7 +84,7 @@ ui_allow_established() {
 # network pollution.
 _UI_LOOPBACK_DONE=0
 # shellcheck disable=SC2329
-ui_allow_loopback() {
+allow_loopback() {
   if [[ $_UI_LOOPBACK_DONE -eq 0 ]]; then
     _UI_LOOPBACK_DONE=1
 
@@ -117,7 +117,7 @@ ui_allow_loopback() {
 # state NEW needs to be allowed.
 #
 # shellcheck disable=SC2329
-ui_allow_ping() {
+allow_ping() {
   iptables -A UI_INPUT -p icmp --icmp-type 8 \
     -m conntrack --ctstate NEW \
     -m comment --comment "Accept IPv4 ping" -j ACCEPT
@@ -132,7 +132,7 @@ ui_allow_ping() {
 # and invalid network packets.
 #
 # shellcheck disable=SC2329
-ui_drop_invalid() {
+drop_invalid() {
   # Drop any traffic with an "INVALID" state match.
   for mode in UI_INPUT UI_FORWARD UI_OUTPUT; do
     ui_46iptables -A "$mode" -m conntrack --ctstate INVALID -m comment \
@@ -183,7 +183,7 @@ ui_drop_invalid() {
 # Usernames that do not exist on the host are silently ignored.
 #
 # shellcheck disable=SC2329
-ui_allow_users_output() {
+allow_users_output() {
   local cur_user
   for cur_user in "$@"; do
     if id "$cur_user" &>/dev/null; then
