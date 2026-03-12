@@ -482,6 +482,13 @@ _ui_init() {
 
   trap '_ui_atexit' INT TERM EXIT QUIT
 
+  # Default policy
+  #
+  # Setting the default policy to DROP before flushing and rebuilding the custom
+  # chains to eliminate the brief window where packets could bypass the firewall
+  # and fall through to an open default policy.
+  _ui_default_policy
+
   # Reset iptables chains
   #
   # NOTE: -n: prevents iptables from hanging on reverse DNS lookups (missing the
@@ -592,7 +599,6 @@ _ui_main() {
   fi
   _ui_source_all_update_iptables_files
 
-  _ui_default_policy
   _ui_enable_logging
   _ui_atexit
 }
