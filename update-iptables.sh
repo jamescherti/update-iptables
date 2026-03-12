@@ -453,52 +453,67 @@ _ui_init() {
   # Reset iptables chains
   for chain in UI_INPUT UI_OUTPUT UI_FORWARD; do
     _ui_log_title "FLUSH CHAIN: $chain"
-    if iptables -A "$chain" >/dev/null; then
+    if iptables -L "$chain" &>/dev/null; then
       iptables -F "$chain" || true
       # Note: nat table support for IPv6 requires a newer kernel (3.7+)
-      iptables -t nat -L -n &>/dev/null \
-        && iptables -t nat -F "$chain" || true
-      iptables -t mangle -L -n &>/dev/null \
-        && iptables -t mangle -F "$chain" || true
+      if iptables -t nat -L &>/dev/null; then
+        iptables -t nat -F "$chain" || true
+      fi
+
+      if iptables -t mangle -L &>/dev/null; then
+        iptables -t mangle -F "$chain" || true
+      fi
     else
       # Create the chain
       iptables -N "$chain" || true
     fi
 
     _ui_log_title "FLUSH IPv6 CHAIN: $chain"
-    if "$IP6TABLES_CMD" -A "$chain" 2>/dev/null; then
+    if "$IP6TABLES_CMD" -L "$chain" &>/dev/null; then
       # Note: nat table support for IPv6 requires a newer kernel (3.7+)
-      ip6tables -t nat -L -n &>/dev/null \
-        && ip6tables -t nat -F "$chain" || true
-      ip6tables -t mangle -L -n &>/dev/null \
-        && ip6tables -t mangle -F "$chain" || true
+      if ip6tables -t nat -L &>/dev/null; then
+        ip6tables -t nat -F "$chain" || true
+      fi
+
+      if ip6tables -t mangle -L &>/dev/null; then
+        ip6tables -t mangle -F "$chain" || true
+      fi
     else
       ip6tables -N "$chain"
     fi
   done
 
   # Attach chains
-  iptables -C OUTPUT -j UI_OUTPUT 2>/dev/null \
-    || iptables -I OUTPUT 1 -j UI_OUTPUT
-  iptables -C INPUT -j UI_INPUT 2>/dev/null \
-    || iptables -I INPUT 1 -j UI_INPUT
-  ip6tables -C OUTPUT -j UI_OUTPUT 2>/dev/null \
-    || ip6tables -I OUTPUT 1 -j UI_OUTPUT
-  ip6tables -C INPUT -j UI_INPUT 2>/dev/null \
-    || ip6tables -I INPUT 1 -j UI_INPUT
+  if iptables -C OUTPUT -j UI_OUTPUT 2>/dev/null; then
+    iptables -I OUTPUT 1 -j UI_OUTPUT
+  fi
+  if iptables -C INPUT -j UI_INPUT 2>/dev/null; then
+    iptables -I INPUT 1 -j UI_INPUT
+  fi
+  if ip6tables -C OUTPUT -j UI_OUTPUT 2>/dev/null; then
+    ip6tables -I OUTPUT 1 -j UI_OUTPUT
+  fi
+  if ip6tables -C INPUT -j UI_INPUT 2>/dev/null; then
+    ip6tables -I INPUT 1 -j UI_INPUT
+  fi
 
   # Add my postrouting to postrouting
-  iptables -t nat -C POSTROUTING -j UI_POSTROUTING 2>/dev/null \
-    || iptables -t nat -I POSTROUTING 1 -j UI_POSTROUTING
+  if iptables -t nat -C POSTROUTING -j UI_POSTROUTING 2>/dev/null; then
+    iptables -t nat -I POSTROUTING 1 -j UI_POSTROUTING
+  fi
+
   # Add my prerouting to prerouting
-  iptables -t nat -C PREROUTING -j UI_PREROUTING 2>/dev/null \
-    || iptables -t nat -I PREROUTING 1 -j UI_PREROUTING
+  if iptables -t nat -C PREROUTING -j UI_PREROUTING 2>/dev/null; then
+    iptables -t nat -I PREROUTING 1 -j UI_PREROUTING
+  fi
 
-  iptables -C FORWARD -j UI_FORWARD 2>/dev/null \
-    || iptables -I FORWARD 1 -j UI_FORWARD
-  ip6tables -C FORWARD -j UI_FORWARD 2>/dev/null \
-    || ip6tables -I FORWARD 1 -j UI_FORWARD
+  if iptables -C FORWARD -j UI_FORWARD 2>/dev/null; then
+    iptables -I FORWARD 1 -j UI_FORWARD
+  fi
 
+  if ip6tables -C FORWARD -j UI_FORWARD 2>/dev/null; then
+    ip6tables -I FORWARD 1 -j UI_FORWARD
+  fi
 }
 
 _ui_default_policy() {
