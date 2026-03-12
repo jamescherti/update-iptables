@@ -67,7 +67,9 @@ VERBOSE=1
 # to them (such as ICMP error messages). This rule ensures that once a
 # connection has been permitted by a specific rule, all subsequent packets for
 # that session are processed quickly and efficiently without re-evaluating the
-# entire rule set. shellcheck disable=SC2329
+# entire rule set.
+# shellcheck disable=SC2329
+# shellcheck disable=SC2317
 allow_established() {
   ui_46iptables \
     -A UI_FORWARD -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
@@ -84,6 +86,7 @@ allow_established() {
 # network pollution.
 _UI_LOOPBACK_DONE=0
 # shellcheck disable=SC2329
+# shellcheck disable=SC2317
 allow_loopback() {
   if [[ $_UI_LOOPBACK_DONE -eq 0 ]]; then
     _UI_LOOPBACK_DONE=1
@@ -117,6 +120,7 @@ allow_loopback() {
 # state NEW needs to be allowed.
 #
 # shellcheck disable=SC2329
+# shellcheck disable=SC2317
 allow_ping() {
   iptables -A UI_INPUT -p icmp --icmp-type 8 \
     -m conntrack --ctstate NEW \
@@ -132,6 +136,7 @@ allow_ping() {
 # and invalid network packets.
 #
 # shellcheck disable=SC2329
+# shellcheck disable=SC2317
 drop_invalid() {
   # Drop any traffic with an "INVALID" state match.
   for mode in UI_INPUT UI_FORWARD UI_OUTPUT; do
@@ -183,6 +188,7 @@ drop_invalid() {
 # Usernames that do not exist on the host are silently ignored.
 #
 # shellcheck disable=SC2329
+# shellcheck disable=SC2317
 allow_users_output() {
   local cur_user
   for cur_user in "$@"; do
@@ -220,6 +226,7 @@ ui_46iptables() {
 }
 
 # shellcheck disable=SC2329
+# shellcheck disable=SC2317
 _ui_error_handler() {
   local errno="$?"
   trap - INT TERM EXIT QUIT ERR
@@ -286,9 +293,10 @@ _ui_atexit() {
           if [[ -f "$IPTABLES_FILE_AFTER" ]] \
             && [[ -f "$IPTABLES_FILE_BEFORE" ]]; then
             echo "Diff:"
-            echo "--------------------------------------------------------------------"
-            diff --color -rupN "$IPTABLES_FILE_BEFORE" "$IPTABLES_FILE_AFTER" || true
-            echo "--------------------------------------------------------------------"
+            echo "-------------------------------------------------------------"
+            diff --color -rupN \
+              "$IPTABLES_FILE_BEFORE" "$IPTABLES_FILE_AFTER" || true
+            echo "-------------------------------------------------------------"
           fi
         fi
       fi
