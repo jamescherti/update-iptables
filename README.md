@@ -49,10 +49,9 @@ Add your `iptables` commands in the file. For example:
 
 ```bash
 # Accept traffic belonging to already established connections or packets related
-# to them (such as ICMP error messages). This rule ensures that once a
-# connection has been permitted by a specific rule, all subsequent packets for
-# that session are processed quickly and efficiently without re-evaluating the
-# entire rule set.
+# to them. This rule ensures that once a connection has been permitted by a
+# specific rule, all subsequent packets for that session are processed quickly
+# and efficiently without re-evaluating the entire rule set.
 allow_established
 
 # Allow all legitimate internal traffic on the 'lo' interface,

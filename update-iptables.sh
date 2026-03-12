@@ -85,10 +85,9 @@ allow_ipv6_ndp() {
 }
 
 # Accept traffic belonging to already established connections or packets related
-# to them (such as ICMP error messages). This rule ensures that once a
-# connection has been permitted by a specific rule, all subsequent packets for
-# that session are processed quickly and efficiently without re-evaluating the
-# entire rule set.
+# to them. This rule ensures that once a connection has been permitted by a
+# specific rule, all subsequent packets for that session are processed quickly
+# and efficiently without re-evaluating the entire rule set.
 # shellcheck disable=SC2329
 # shellcheck disable=SC2317
 allow_established() {
