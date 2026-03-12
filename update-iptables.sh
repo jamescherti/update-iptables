@@ -92,11 +92,11 @@ allow_ipv6_ndp() {
 # shellcheck disable=SC2329
 # shellcheck disable=SC2317
 allow_established() {
-  ui_46iptables \
+  ip46tables \
     -A UI_FORWARD -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
-  ui_46iptables \
+  ip46tables \
     -A UI_INPUT -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
-  ui_46iptables \
+  ip46tables \
     -A UI_OUTPUT -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
 }
 
@@ -126,11 +126,11 @@ allow_loopback() {
 
     # ACCEPT: LOOPBACK INPUT
     # Accept traffic from the "loopback" interface.
-    ui_46iptables -A UI_INPUT -i lo -j ACCEPT
+    ip46tables -A UI_INPUT -i lo -j ACCEPT
 
     # ACCEPT: LOOPBACK OUTPUT
     # Accept traffic to the "loopback" interface.
-    ui_46iptables -A UI_OUTPUT -o lo -j ACCEPT
+    ip46tables -A UI_OUTPUT -o lo -j ACCEPT
   fi
 }
 
@@ -163,7 +163,7 @@ allow_ping() {
 drop_invalid() {
   # Drop any traffic with an "INVALID" state match.
   for mode in UI_INPUT UI_FORWARD UI_OUTPUT; do
-    ui_46iptables -A "$mode" -m conntrack --ctstate INVALID -m comment \
+    ip46tables -A "$mode" -m conntrack --ctstate INVALID -m comment \
       --comment "DROP invalid" -j DROP
   done
 
@@ -243,7 +243,7 @@ ip6tables() {
   return 0
 }
 
-ui_46iptables() {
+ip46tables() {
   iptables "$@"
   ip6tables "$@"
 }
@@ -289,9 +289,9 @@ _ui_atexit() {
       echo >&2
       echo "ERROR with iptables!" >&2
       echo "[INFO] Locking down policies to DROP due to failure." >&2
-      ui_46iptables -P FORWARD DROP
-      ui_46iptables -P INPUT DROP
-      ui_46iptables -P OUTPUT DROP
+      ip46tables -P FORWARD DROP
+      ip46tables -P INPUT DROP
+      ip46tables -P OUTPUT DROP
     else
       if [[ -n "$IPTABLES_FILE_AFTER" ]]; then
         echo "[SAVE] Rules saved to: $IPTABLES_FILE_AFTER"
@@ -336,8 +336,8 @@ _ui_enable_logging() {
   local item
   for item in UI_INPUT UI_OUTPUT UI_FORWARD; do
     # Safely create and flush the logging chain
-    ui_46iptables -N "LOGGING_$item" 2>/dev/null || true
-    ui_46iptables -F "LOGGING_$item"
+    ip46tables -N "LOGGING_$item" 2>/dev/null || true
+    ip46tables -F "LOGGING_$item"
 
     # Append the logging chain to the end of the main chain
     iptables -C "$item" -j "LOGGING_$item" 2>/dev/null \
@@ -352,7 +352,7 @@ _ui_enable_logging() {
     ip6tables -A "LOGGING_$item" -m limit --limit 10/min --limit-burst 20 \
       -j LOG --log-prefix "[UPDATE-IP6TABLES $item] " --log-level 4
 
-    ui_46iptables -A "LOGGING_$item" -j RETURN
+    ip46tables -A "LOGGING_$item" -j RETURN
   done
 }
 
@@ -443,7 +443,7 @@ _ui_init() {
   if [[ $# -gt 0 ]] && [[ $1 == "flush" ]]; then
     # flush (delete) only managed chains cooperatively
     for chain in UI_INPUT UI_OUTPUT UI_FORWARD UI_PREROUTING UI_POSTROUTING; do
-      ui_46iptables -F "$chain" 2>/dev/null || true
+      ip46tables -F "$chain" 2>/dev/null || true
       iptables -t nat -F "$chain" 2>/dev/null || true
       ip6tables -t nat -F "$chain" 2>/dev/null || true
     done
@@ -455,13 +455,13 @@ _ui_init() {
   if [[ $# -gt 0 ]] && [[ $1 == "flush-all" ]]; then
     rm -f "$FIRST_SUCCESSFUL_RUN_FILE"
 
-    ui_46iptables -F
-    ui_46iptables -Z
-    ui_46iptables -X
+    ip46tables -F
+    ip46tables -Z
+    ip46tables -X
 
-    ui_46iptables --policy INPUT ACCEPT
-    ui_46iptables --policy OUTPUT ACCEPT
-    ui_46iptables --policy FORWARD ACCEPT
+    ip46tables --policy INPUT ACCEPT
+    ip46tables --policy OUTPUT ACCEPT
+    ip46tables --policy FORWARD ACCEPT
 
     echo "Success: iptables rules flushed successfully."
     exit 0
@@ -583,9 +583,9 @@ _ui_init() {
 _ui_default_policy() {
   _ui_log_title "DEFAULT POLICY"
 
-  ui_46iptables -P FORWARD DROP
-  ui_46iptables -P INPUT DROP
-  ui_46iptables -P OUTPUT DROP
+  ip46tables -P FORWARD DROP
+  ip46tables -P INPUT DROP
+  ip46tables -P OUTPUT DROP
 }
 
 _ui_main() {
