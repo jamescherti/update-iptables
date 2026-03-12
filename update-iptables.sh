@@ -64,11 +64,10 @@ UI_NETWORK_ZONE="unknown" # Default zone
 VERBOSE=1
 
 # Accept traffic belonging to already established connections or packets related
-# to them (such as ICMP error messages). This rule is the cornerstone of a
-# stateful firewall; it ensures that once a connection has been permitted by a
-# specific rule, all subsequent packets for that session are processed quickly
-# and efficiently without re-evaluating the entire rule set.
-# shellcheck disable=SC2329
+# to them (such as ICMP error messages). This rule ensures that once a
+# connection has been permitted by a specific rule, all subsequent packets for
+# that session are processed quickly and efficiently without re-evaluating the
+# entire rule set. shellcheck disable=SC2329
 ui_allow_established() {
   ui_46iptables \
     -A UI_FORWARD -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
