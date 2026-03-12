@@ -332,7 +332,7 @@ _ui_source_all_update_iptables_files() {
   if [[ -d "$directory" ]]; then
     while IFS= read -r file; do
       if [[ -r "$file" ]]; then
-        echo "[SOURCE] $file"
+        _ui_log_title "[RULES] $UPDATE_IPTABLES_CFG_FILE"
         # shellcheck disable=SC1090
         source "$file"
       else
@@ -521,8 +521,8 @@ _ui_main() {
 
   _ui_default_policy
 
-  _ui_log_title "MAIN RULES"
   if [[ -f "$UPDATE_IPTABLES_CFG_FILE" ]]; then
+    _ui_log_title "[RULES] $UPDATE_IPTABLES_CFG_FILE"
     # shellcheck disable=SC1090
     source "$UPDATE_IPTABLES_CFG_FILE"
   fi
