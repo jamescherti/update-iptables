@@ -63,6 +63,27 @@ UPDATE_IPTABLES_RULES_CFG_DIR="/etc/update-iptables.d"
 NETWORK_ZONE="unknown" # Default zone
 VERBOSE=1
 
+#
+# Allow essential ICMPv6 types for proper IPv6 operation (Neighbor Discovery,
+# Router Solicitation, MTU discovery). Without this, IPv6 connectivity will fail.
+#
+# shellcheck disable=SC2329
+# shellcheck disable=SC2317
+allow_ipv6_ndp() {
+  ip6tables -A UI_INPUT -p ipv6-icmp -m hl --hl-eq 255 -j ACCEPT
+  ip6tables -A UI_OUTPUT -p ipv6-icmp -m hl --hl-eq 255 -j ACCEPT
+  ip6tables -A UI_INPUT -p icmpv6 --icmpv6-type 128 -j ACCEPT
+  ip6tables -A UI_INPUT -p icmpv6 --icmpv6-type 129 -j ACCEPT
+  ip6tables -A UI_INPUT -p icmpv6 --icmpv6-type 135 -j ACCEPT
+  ip6tables -A UI_INPUT -p icmpv6 --icmpv6-type 136 -j ACCEPT
+  ip6tables -A UI_INPUT -p icmpv6 --icmpv6-type 133 -j ACCEPT
+  ip6tables -A UI_INPUT -p icmpv6 --icmpv6-type 134 -j ACCEPT
+  ip6tables -A UI_INPUT -p icmpv6 --icmpv6-type 1 -j ACCEPT
+  ip6tables -A UI_INPUT -p icmpv6 --icmpv6-type 2 -j ACCEPT
+  ip6tables -A UI_INPUT -p icmpv6 --icmpv6-type 3 -j ACCEPT
+  ip6tables -A UI_INPUT -p icmpv6 --icmpv6-type 4 -j ACCEPT
+}
+
 # Accept traffic belonging to already established connections or packets related
 # to them (such as ICMP error messages). This rule ensures that once a
 # connection has been permitted by a specific rule, all subsequent packets for
@@ -543,8 +564,7 @@ _ui_default_policy() {
 _ui_main() {
   _ui_init "$@"
 
-  _ui_default_policy
-
+  # CUSTOM RULES
   if [[ -f "$UPDATE_IPTABLES_CFG_FILE" ]]; then
     _ui_log_title "[RULES] $UPDATE_IPTABLES_CFG_FILE"
     # shellcheck disable=SC1090
@@ -552,6 +572,7 @@ _ui_main() {
   fi
   _ui_source_all_update_iptables_files
 
+  _ui_default_policy
   _ui_enable_logging
   _ui_atexit
 }
