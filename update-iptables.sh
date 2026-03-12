@@ -550,14 +550,18 @@ _ui_init() {
   fi
 
   # Add my prerouting to prerouting
-  if ! iptables -t nat -C PREROUTING -j UI_PREROUTING 2>/dev/null; then
-    iptables -t nat -I PREROUTING 1 -j UI_PREROUTING
-  fi
-
   if ip6tables -t nat -L -n &>/dev/null; then
     if ! ip6tables -t nat -C PREROUTING -j UI_PREROUTING 2>/dev/null; then
       ip6tables -t nat -I PREROUTING 1 -j UI_PREROUTING
     fi
+
+    if ! ip6tables -t nat -C POSTROUTING -j UI_POSTROUTING 2>/dev/null; then
+      ip6tables -t nat -I POSTROUTING 1 -j UI_POSTROUTING
+    fi
+  fi
+
+  if ! iptables -t nat -C PREROUTING -j UI_PREROUTING 2>/dev/null; then
+    iptables -t nat -I PREROUTING 1 -j UI_PREROUTING
   fi
 
   if ! iptables -C FORWARD -j UI_FORWARD 2>/dev/null; then
