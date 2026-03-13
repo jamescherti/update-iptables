@@ -20,7 +20,7 @@
 # files while maintaining exact visibility into how every packet traverses the
 # kernel network stack.
 #
-# Updates rules can be laoded from:
+# Updates rules can be loaded from:
 #   - /etc/default/update-iptables
 #   - Any files that is in the directory: /etc/default/update-iptables.d/
 #
