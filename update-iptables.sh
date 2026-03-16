@@ -69,7 +69,7 @@ VERBOSE=1
 #
 # shellcheck disable=SC2329
 # shellcheck disable=SC2317
-allow_ipv6_ndp() {
+ui_allow_ipv6_ndp() {
   ip6tables -A UI_INPUT -p ipv6-icmp -m hl --hl-eq 255 -j ACCEPT
   ip6tables -A UI_OUTPUT -p ipv6-icmp -m hl --hl-eq 255 -j ACCEPT
   ip6tables -A UI_INPUT -p icmpv6 --icmpv6-type 128 -j ACCEPT
@@ -90,7 +90,7 @@ allow_ipv6_ndp() {
 # and efficiently without re-evaluating the entire rule set.
 # shellcheck disable=SC2329
 # shellcheck disable=SC2317
-allow_established() {
+ui_allow_established() {
   ip46tables \
     -A UI_FORWARD -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
   ip46tables \
@@ -107,7 +107,7 @@ allow_established() {
 _UI_LOOPBACK_DONE=0
 # shellcheck disable=SC2329
 # shellcheck disable=SC2317
-allow_loopback() {
+ui_allow_loopback() {
   if [[ $_UI_LOOPBACK_DONE -eq 0 ]]; then
     _UI_LOOPBACK_DONE=1
 
@@ -141,7 +141,7 @@ allow_loopback() {
 #
 # shellcheck disable=SC2329
 # shellcheck disable=SC2317
-allow_ping() {
+ui_allow_ping() {
   iptables -A UI_INPUT -p icmp --icmp-type 8 \
     -m conntrack --ctstate NEW \
     -m limit --limit 2/sec --limit-burst 5 \
@@ -163,7 +163,7 @@ allow_ping() {
 #
 # shellcheck disable=SC2329
 # shellcheck disable=SC2317
-allow_users_output() {
+ui_allow_users_output() {
   local cur_user
   for cur_user in "$@"; do
     if id "$cur_user" &>/dev/null; then
@@ -284,7 +284,7 @@ _ui_atexit() {
 }
 
 # shellcheck disable=SC2329
-enable_logging() {
+ui_enable_logging() {
   local item
   for item in UI_INPUT UI_OUTPUT UI_FORWARD; do
     # Safely create and flush the logging chain
