@@ -357,8 +357,8 @@ ui_enable_logging() {
     # --log-ip-options: This records any options set in the IP header, which is
     # useful for detecting source routing or other unusual network
     # configurations.
-    iptables -A "LOGGING_$item" --log-prefix "[UI IPv6 $item] " "${opts[@]}"
-    ip6tables -A "LOGGING_$item" --log-prefix "[UI IPv6 $item] " "${opts[@]}"
+    iptables -A "LOGGING_$item" "${opts[@]}" --log-prefix "[UI IPv6 $item] "
+    ip6tables -A "LOGGING_$item" "${opts[@]}" --log-prefix "[UI IPv6 $item] "
 
     ip46tables -A "LOGGING_$item" -j RETURN
   done
