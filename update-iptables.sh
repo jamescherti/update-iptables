@@ -322,8 +322,6 @@ _ui_atexit() {
 # shellcheck disable=SC2329
 ui_enable_logging() {
   local item
-  local prefix_v4
-  local prefix_v6
 
   for item in UI_INPUT UI_OUTPUT UI_FORWARD; do
     # Safely create and flush the logging chain
@@ -336,17 +334,31 @@ ui_enable_logging() {
     ip6tables -C "$item" -j "LOGGING_$item" 2>/dev/null \
       || ip6tables -A "$item" -j "LOGGING_$item"
 
-    prefix_v4="[UI IPv4 $item] "
-    prefix_v6="[UI IPv6 $item] "
+    local opts
+    opts=(-m limit --limit 10/min --limit-burst 20
+      -j LOG --log-level 4
+      --log-uid --log-tcp-sequence --log-tcp-options --log-ip-options)
 
     # Log the packet, then return to let standard routing handle it
     # cooperatively
-    iptables -A "LOGGING_$item" -m limit --limit 10/min --limit-burst 20 \
-      -j LOG --log-prefix "$prefix_v4" --log-level 4 \
-      --log-uid --log-tcp-sequence --log-tcp-options --log-ip-options
-    ip6tables -A "LOGGING_$item" -m limit --limit 10/min --limit-burst 20 \
-      -j LOG --log-prefix "$prefix_v6" --log-level 4 \
-      --log-uid --log-tcp-sequence --log-tcp-options --log-ip-options
+    #
+    # --log-uid: This records the numeric user ID of the process that generated
+    # the packet. This is significant for the OUTPUT chain to identify exactly
+    # which local user or service is attempting to send traffic.
+    #
+    # --log-tcp-sequence: This logs the TCP sequence numbers. It is helpful for
+    # debugging connection issues or analyzing potential session hijacking
+    # attempts.
+    #
+    # --log-tcp-options: This logs the options from the TCP header, which can
+    # help diagnose performance issues related to window scaling or Selective
+    # Acknowledgments (SACK).
+    #
+    # --log-ip-options: This records any options set in the IP header, which is
+    # useful for detecting source routing or other unusual network
+    # configurations.
+    iptables -A "LOGGING_$item" --log-prefix "[UI IPv6 $item] " "${opts[@]}"
+    ip6tables -A "LOGGING_$item" --log-prefix "[UI IPv6 $item] " "${opts[@]}"
 
     ip46tables -A "LOGGING_$item" -j RETURN
   done
