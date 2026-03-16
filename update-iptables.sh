@@ -288,7 +288,7 @@ _ui_atexit() {
             && [[ -f "$IPTABLES_FILE_BEFORE" ]]; then
             echo "Diff:"
             echo "-------------------------------------------------------------"
-            diff --color -rupN \
+            diff --color=auto -rupN \
               "$IPTABLES_FILE_BEFORE" "$IPTABLES_FILE_AFTER" || true
             echo "-------------------------------------------------------------"
           fi
