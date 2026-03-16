@@ -53,14 +53,12 @@
 set -euf -o pipefail
 
 FIRST_SUCCESSFUL_RUN_FILE="/run/update-iptables.first-run"
-NETWORK_ZONE_FILE="/run/update-iptables.network-zone"
 IPTABLES_FILE_BEFORE="/etc/.update-iptables-rules-v4.before"
 IPTABLES_FILE_AFTER="/etc/.update-iptables-rules-v4.after"
 
 UPDATE_IPTABLES_CFG_FILE="/etc/update-iptables.rules"
 UPDATE_IPTABLES_RULES_CFG_DIR="/etc/update-iptables.d"
 
-NETWORK_ZONE="unknown" # Default zone
 VERBOSE=1
 
 #
@@ -435,17 +433,6 @@ _ui_init() {
 
   trap "_ui_error_handler" ERR
   set -o errtrace
-
-  if [[ $UI_RESET -eq 0 ]]; then
-    echo "$NETWORK_ZONE" >"$NETWORK_ZONE_FILE"
-    rm -f "$FIRST_SUCCESSFUL_RUN_FILE"
-    # TODO add this back?
-    # echo >"$IPTABLES_FILE_BEFORE"
-  else
-    if [[ -f "$NETWORK_ZONE_FILE" ]]; then
-      NETWORK_ZONE=$(head -n 1 "$NETWORK_ZONE_FILE")
-    fi
-  fi
 
   # Arg: flush
   if [[ $# -gt 0 ]] && [[ $1 == "flush" ]]; then
