@@ -91,12 +91,20 @@ ui_allow_ipv6_ndp() {
 # shellcheck disable=SC2329
 # shellcheck disable=SC2317
 ui_allow_established() {
-  ip46tables \
-    -A UI_FORWARD -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
-  ip46tables \
-    -A UI_INPUT -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
-  ip46tables \
-    -A UI_OUTPUT -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
+  if [[ $# -eq 0 ]]; then
+    ip46tables \
+      -A UI_FORWARD -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
+    ip46tables \
+      -A UI_INPUT -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
+    ip46tables \
+      -A UI_OUTPUT -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
+  else
+    local chain
+    for chain in "$@"; do
+      ip46tables \
+        -A "$@" -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
+    done
+  fi
 }
 
 # Allow all legitimate internal traffic on the 'lo' interface, which is required
@@ -136,7 +144,7 @@ ui_allow_loopback() {
 # ACCEPT: LOOPBACK OUTPUT FOR SPECIFIC USERS
 # Accept traffic to the "loopback" interface only if the user exists.
 # shellcheck disable=SC2329
-ui_allow_users_loopback() {
+ui_allow_users_output_loopback() {
   local user
   for user in "$@"; do
     if getent passwd "$user" >/dev/null 2>&1; then

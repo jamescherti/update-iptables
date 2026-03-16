@@ -52,7 +52,11 @@ Add your `iptables` commands in the file. For example:
 # to them. This rule ensures that once a connection has been permitted by a
 # specific rule, all subsequent packets for that session are processed quickly
 # and efficiently without re-evaluating the entire rule set.
-ui_allow_established
+#
+# (Add UI_FORWARD if the system is acting as a router, gateway, or host for
+# virtual machines and containers, such as Docker, libvirt, that require network
+# access.)
+ui_allow_established UI_INPUT UI_OUTPUT
 
 # Allow all legitimate internal traffic on the 'lo' interface,
 # which is required for local applications and services to communicate.
