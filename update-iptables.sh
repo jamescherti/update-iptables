@@ -154,54 +154,6 @@ allow_ping() {
 }
 
 #
-# This function establishes defensive firewall rules to drop malformed, spoofed,
-# and invalid network packets.
-#
-# shellcheck disable=SC2329
-# shellcheck disable=SC2317
-drop_invalid() {
-  # Drop any traffic with an "INVALID" state match.
-  for mode in UI_INPUT UI_FORWARD UI_OUTPUT; do
-    ip46tables -A "$mode" -m conntrack --ctstate INVALID -m comment \
-      --comment "DROP invalid" -j DROP
-  done
-
-  # Reject packets from RFC1918 class networks (i.e., spoofed) Drop spoofed
-  # packets claiming to be from private/local networks Replace 'eth0' with your
-  # actual external interface name
-  local ext_if
-  ext_if=""
-  ext_if=$(ip route show default | awk '/default/ {print $5}' | head -n 1) \
-    || true
-
-  # Ensure that the interface exists
-  if [[ -n "$ext_if" ]] && ip link show "$ext_if" &>/dev/null; then
-    iptables -A UI_INPUT -i "$ext_if" -s 127.0.0.0/8 -j DROP
-    iptables -A UI_INPUT -i "$ext_if" -s 10.0.0.0/8 -j DROP
-    iptables -A UI_INPUT -i "$ext_if" -s 169.254.0.0/16 -j DROP
-    iptables -A UI_INPUT -i "$ext_if" -s 172.16.0.0/12 -j DROP
-    iptables -A UI_INPUT -i "$ext_if" -s 192.168.0.0/16 -j DROP
-    iptables -A UI_INPUT -i "$ext_if" -s 224.0.0.0/4 -j DROP
-    iptables -A UI_INPUT -i "$ext_if" -d 224.0.0.0/4 -j DROP
-    iptables -A UI_INPUT -i "$ext_if" -s 240.0.0.0/5 -j DROP
-    iptables -A UI_INPUT -i "$ext_if" -d 240.0.0.0/5 -j DROP
-    iptables -A UI_INPUT -i "$ext_if" -s 0.0.0.0/8 -j DROP
-    iptables -A UI_INPUT -i "$ext_if" -d 0.0.0.0/8 -j DROP
-    iptables -A UI_INPUT -i "$ext_if" -d 239.255.255.0/24 -j DROP
-    iptables -A UI_INPUT -i "$ext_if" -d 255.255.255.255 -j DROP
-  fi
-
-  # This section identifies and drops TCP packets with illogical flag
-  # combinations, such as SYN and FIN or SYN and RST being set simultaneously.
-  # Since these combinations are physically impossible in legitimate network
-  # communication, they are often used by attackers to probe network stacks for
-  # vulnerabilities or bypass security filters. Dropping them prevents potential
-  # exploitation of unusual OS behaviors when handling malformed packets.
-  iptables -A UI_INPUT -p tcp -m tcp --tcp-flags SYN,FIN SYN,FIN -j DROP
-  iptables -A UI_INPUT -p tcp -m tcp --tcp-flags SYN,RST SYN,RST -j DROP
-}
-
-#
 # Permit outbound network traffic for a specific list of local system users. The
 # function iterates through the provided usernames, verifies their existence on
 # the system, and appends rules to the UI_OUTPUT chain using the 'owner' module
