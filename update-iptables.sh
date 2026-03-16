@@ -224,7 +224,6 @@ ip46tables() {
 # shellcheck disable=SC2317
 _ui_error_handler() {
   local errno="$?"
-  trap - INT TERM EXIT QUIT ERR
   echo "Error: ${BASH_SOURCE[1]}:${BASH_LINENO[0]}" \
     "(${BASH_COMMAND} exited with status $errno)" >&2
   exit "${errno}"
