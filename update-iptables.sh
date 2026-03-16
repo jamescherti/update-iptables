@@ -133,6 +133,19 @@ ui_allow_loopback() {
   fi
 }
 
+# ACCEPT: LOOPBACK OUTPUT FOR SPECIFIC USERS
+# Accept traffic to the "loopback" interface only if the user exists.
+# shellcheck disable=SC2329
+ui_allow_users_loopback() {
+  local user
+  for user in "$@"; do
+    if getent passwd "$user" >/dev/null 2>&1; then
+      iptables -A UI_OUTPUT -o lo -m owner --uid-owner "$user" -j ACCEPT
+      ip6tables -A UI_OUTPUT -o lo -m owner --uid-owner "$user" -j ACCEPT
+    fi
+  done
+}
+
 #
 # Accept all incoming ICMP echo requests, also known as pings. Only the first
 # packet will count as new, the others will be handled by the RELATED,
