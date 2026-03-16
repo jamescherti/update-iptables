@@ -163,7 +163,7 @@ ui_allow_users_output_loopback() {
   local user
   ui_allow_loopback_input
   for user in "$@"; do
-    if getent passwd "$user" >/dev/null 2>&1; then
+    if id "$user" &>/dev/null; then
       iptables -A UI_OUTPUT -o lo -m owner --uid-owner "$user" -j ACCEPT
       ip6tables -A UI_OUTPUT -o lo -m owner --uid-owner "$user" -j ACCEPT
     fi
