@@ -102,7 +102,7 @@ ui_allow_established() {
     local chain
     for chain in "$@"; do
       ip46tables \
-        -A "$@" -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
+        -A "$chain" -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
     done
   fi
 }
