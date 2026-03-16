@@ -322,6 +322,9 @@ _ui_atexit() {
 # shellcheck disable=SC2329
 ui_enable_logging() {
   local item
+  local prefix_v4
+  local prefix_v6
+
   for item in UI_INPUT UI_OUTPUT UI_FORWARD; do
     # Safely create and flush the logging chain
     ip46tables -N "LOGGING_$item" 2>/dev/null || true
@@ -333,12 +336,17 @@ ui_enable_logging() {
     ip6tables -C "$item" -j "LOGGING_$item" 2>/dev/null \
       || ip6tables -A "$item" -j "LOGGING_$item"
 
+    prefix_v4="[UI IPv4 $item] "
+    prefix_v6="[UI IPv6 $item] "
+
     # Log the packet, then return to let standard routing handle it
     # cooperatively
     iptables -A "LOGGING_$item" -m limit --limit 10/min --limit-burst 20 \
-      -j LOG --log-prefix "[UPDATE-IPTABLES $item] " --log-level 4
+      -j LOG --log-prefix "$prefix_v4" --log-level 4 \
+      --log-uid --log-tcp-sequence --log-tcp-options --log-ip-options
     ip6tables -A "LOGGING_$item" -m limit --limit 10/min --limit-burst 20 \
-      -j LOG --log-prefix "[UPDATE-IP6TABLES $item] " --log-level 4
+      -j LOG --log-prefix "$prefix_v6" --log-level 4 \
+      --log-uid --log-tcp-sequence --log-tcp-options --log-ip-options
 
     ip46tables -A "LOGGING_$item" -j RETURN
   done
