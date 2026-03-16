@@ -178,7 +178,7 @@ iptables() {
   fi
 
   # -w: Add automatic xtables lock waiting.
-  "$IPTABLES_CMD" -w 5 "$@" || return "$?"
+  command "$IPTABLES_CMD" -w 5 "$@" || return "$?"
 
   return 0
 }
@@ -189,7 +189,7 @@ ip6tables() {
   fi
 
   # -w: Add automatic xtables lock waiting.
-  "$IP6TABLES_CMD" -w 5 "$@" || return "$?"
+  command "$IP6TABLES_CMD" -w 5 "$@" || return "$?"
 
   return 0
 }
@@ -283,7 +283,8 @@ _ui_atexit() {
   exit "$errno"
 }
 
-_ui_enable_logging() {
+# shellcheck disable=SC2329
+enable_logging() {
   local item
   for item in UI_INPUT UI_OUTPUT UI_FORWARD; do
     # Safely create and flush the logging chain
@@ -550,7 +551,6 @@ _ui_main() {
   fi
   _ui_source_all_update_iptables_files
 
-  _ui_enable_logging
   _ui_atexit
 }
 
