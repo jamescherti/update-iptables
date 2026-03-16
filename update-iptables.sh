@@ -112,18 +112,30 @@ ui_allow_established() {
 # packets on non-loopback interfaces that spoof loopback IP addresses
 # (127.0.0.0/8 and ::1/128) to protect the system from external manipulation and
 # network pollution.
-_UI_LOOPBACK_DONE=0
+_UI_LOOPBACK_INPUT_DONE=0
 # shellcheck disable=SC2329
 # shellcheck disable=SC2317
-ui_allow_loopback() {
-  if [[ $_UI_LOOPBACK_DONE -eq 0 ]]; then
-    _UI_LOOPBACK_DONE=1
-
+ui_allow_loopback_input() {
+  if [[ $_UI_LOOPBACK_INPUT_DONE -eq 0 ]]; then
+    _UI_LOOPBACK_INPUT_DONE=1
     # ANTI-SPOOFING: Drop packets claiming to be loopback from outside If a
     # packet claims to be from the loopback subnet/address, but it arrived on
     # any interface other than 'lo', drop it immediately.
     iptables -A UI_INPUT -s 127.0.0.0/8 ! -i lo -j DROP
     ip6tables -A UI_INPUT -s ::1/128 ! -i lo -j DROP
+
+    # ACCEPT: LOOPBACK INPUT
+    # Accept traffic from the "loopback" interface.
+    ip46tables -A UI_INPUT -i lo -j ACCEPT
+  fi
+}
+
+_UI_LOOPBACK_OUTPUT_DONE=0
+# shellcheck disable=SC2329
+# shellcheck disable=SC2317
+ui_allow_loopback_output() {
+  if [[ $_UI_LOOPBACK_OUTPUT_DONE -eq 0 ]]; then
+    _UI_LOOPBACK_OUTPUT_DONE=1
 
     # ANTI-POLLUTION: Prevent loopback traffic from leaving the machine This
     # prevents accidentally routing packets destined for loopback out into the
@@ -131,14 +143,17 @@ ui_allow_loopback() {
     iptables -A UI_OUTPUT -d 127.0.0.0/8 ! -o lo -j DROP
     ip6tables -A UI_OUTPUT -d ::1/128 ! -o lo -j DROP
 
-    # ACCEPT: LOOPBACK INPUT
-    # Accept traffic from the "loopback" interface.
-    ip46tables -A UI_INPUT -i lo -j ACCEPT
-
     # ACCEPT: LOOPBACK OUTPUT
     # Accept traffic to the "loopback" interface.
     ip46tables -A UI_OUTPUT -o lo -j ACCEPT
   fi
+}
+
+# shellcheck disable=SC2329
+# shellcheck disable=SC2317
+ui_allow_loopback() {
+  ui_allow_loopback_input
+  ui_allow_loopback_output
 }
 
 # ACCEPT: LOOPBACK OUTPUT FOR SPECIFIC USERS
@@ -146,6 +161,7 @@ ui_allow_loopback() {
 # shellcheck disable=SC2329
 ui_allow_users_output_loopback() {
   local user
+  ui_allow_loopback_input
   for user in "$@"; do
     if getent passwd "$user" >/dev/null 2>&1; then
       iptables -A UI_OUTPUT -o lo -m owner --uid-owner "$user" -j ACCEPT
