@@ -48,6 +48,10 @@ sudo nano /etc/update-iptables.d/10-my-rules.rules
 Add your `iptables` commands in the file. For example:
 
 ```bash
+# Set the default policy of the INPUT, OUTPUT, and FORWARD chains to DROP. This
+# establishes a default-deny firewall policy for both IPv4 and IPv6.
+ui_set_drop_policy
+
 # Accept traffic belonging to already established connections or packets related
 # to them. This rule ensures that once a connection has been permitted by a
 # specific rule, all subsequent packets for that session are processed quickly

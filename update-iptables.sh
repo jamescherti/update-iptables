@@ -61,6 +61,15 @@ UPDATE_IPTABLES_RULES_CFG_DIR="/etc/update-iptables.d"
 
 VERBOSE=1
 
+# Set the default policy of the INPUT, OUTPUT, and FORWARD chains to DROP. This
+# establishes a default-deny firewall policy for both IPv4 and IPv6.
+# shellcheck disable=SC2317
+ui_set_drop_policy() {
+  ip46tables -P FORWARD DROP
+  ip46tables -P INPUT DROP
+  ip46tables -P OUTPUT DROP
+}
+
 #
 # Allow essential ICMPv6 types for proper IPv6 operation (Neighbor Discovery,
 # Router Solicitation, MTU discovery). Without this, IPv6 connectivity will fail.
@@ -477,13 +486,6 @@ _ui_init() {
 
   trap '_ui_atexit' INT TERM EXIT QUIT
 
-  # Default policy
-  #
-  # Setting the default policy to DROP before flushing and rebuilding the custom
-  # chains to eliminate the brief window where packets could bypass the firewall
-  # and fall through to an open default policy.
-  _ui_default_policy
-
   # Reset iptables chains
   #
   # NOTE: -n: prevents iptables from hanging on reverse DNS lookups (missing the
@@ -573,14 +575,6 @@ _ui_init() {
   if ! ip6tables -C FORWARD -j UI_FORWARD 2>/dev/null; then
     ip6tables -I FORWARD 1 -j UI_FORWARD
   fi
-}
-
-_ui_default_policy() {
-  _ui_log_title "DEFAULT POLICY"
-
-  ip46tables -P FORWARD DROP
-  ip46tables -P INPUT DROP
-  ip46tables -P OUTPUT DROP
 }
 
 _ui_main() {
