@@ -392,14 +392,14 @@ _ui_source_all_update_iptables_files() {
 }
 
 _ui_parse_args() {
-  # UI_RESET=0
   OPTIND=1
   while getopts ":hrv" opt; do
     case ${opt} in
     r)
-      # UI_RESET=1
-      # Backward compatibility
-      true
+      ip46tables -P FORWARD DROP
+      ip46tables -P INPUT DROP
+      ip46tables -P OUTPUT DROP
+      exit
       ;;
     v)
       VERBOSE=1
