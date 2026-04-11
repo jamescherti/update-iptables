@@ -64,6 +64,7 @@ VERBOSE=1
 # Set the default policy of the INPUT, OUTPUT, and FORWARD chains to DROP. This
 # establishes a default-deny firewall policy for both IPv4 and IPv6.
 # shellcheck disable=SC2317
+# shellcheck disable=SC2329
 ui_set_drop_policy() {
   ip46tables -P FORWARD DROP
   ip46tables -P INPUT DROP
@@ -391,12 +392,14 @@ _ui_source_all_update_iptables_files() {
 }
 
 _ui_parse_args() {
-  UI_RESET=0
+  # UI_RESET=0
   OPTIND=1
   while getopts ":hrv" opt; do
     case ${opt} in
     r)
-      UI_RESET=1
+      # UI_RESET=1
+      # Backward compatibility
+      true
       ;;
     v)
       VERBOSE=1
