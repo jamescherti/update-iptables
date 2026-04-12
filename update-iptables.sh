@@ -396,10 +396,7 @@ _ui_parse_args() {
   while getopts ":hrv" opt; do
     case ${opt} in
     r)
-      ip46tables -P FORWARD DROP
-      ip46tables -P INPUT DROP
-      ip46tables -P OUTPUT DROP
-      exit
+      true
       ;;
     v)
       VERBOSE=1
@@ -408,7 +405,6 @@ _ui_parse_args() {
       {
         echo "Usage: $0 [-h] [-r] [-v] [flush|flush-all]"
         echo
-        echo "-r    Reset zone and the previous rules"
         echo "-v    Enable verbose output for iptables commands"
         echo "-h    Show this help message and exit"
       } >&2
