@@ -270,7 +270,7 @@ ATEXIT_DONE=0
 _ui_atexit() {
   local errno="$?"
 
-  trap - INT TERM EXIT QUIT ERR
+  trap - EXIT INT TERM HUP QUIT
 
   if [[ $ATEXIT_DONE -eq 0 ]]; then
     ATEXIT_DONE=1
@@ -483,7 +483,7 @@ _ui_init() {
     fi
   fi
 
-  trap '_ui_atexit' INT TERM EXIT QUIT
+  trap _ui_atexit EXIT INT TERM HUP QUIT
 
   # Reset iptables chains
   #
