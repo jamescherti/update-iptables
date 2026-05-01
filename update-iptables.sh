@@ -52,14 +52,14 @@
 # shellcheck disable=SC1091
 set -euf -o pipefail
 
-FIRST_SUCCESSFUL_RUN_FILE="/run/update-iptables.first-run"
-IPTABLES_FILE_BEFORE="/etc/.update-iptables-rules-v4.before"
-IPTABLES_FILE_AFTER="/etc/.update-iptables-rules-v4.after"
+_UI_FIRST_SUCCESSFUL_RUN_FILE="/run/update-iptables.first-run"
+_UI_IPTABLES_FILE_BEFORE="/etc/.update-iptables-rules-v4.before"
+_UI_IPTABLES_FILE_AFTER="/etc/.update-iptables-rules-v4.after"
 
-UPDATE_IPTABLES_CFG_FILE="/etc/update-iptables.rules"
-UPDATE_IPTABLES_RULES_CFG_DIR="/etc/update-iptables.d"
+_UI_UPDATE_IPTABLES_CFG_FILE="/etc/update-iptables.rules"
+_UI_UPDATE_IPTABLES_RULES_CFG_DIR="/etc/update-iptables.d"
 
-VERBOSE=1
+_UI_VERBOSE=1
 
 # Set the default policy of the INPUT, OUTPUT, and FORWARD chains to DROP. This
 # establishes a default-deny firewall policy for both IPv4 and IPv6.
@@ -218,7 +218,7 @@ ui_allow_users_output() {
 }
 
 iptables() {
-  if [[ $VERBOSE -eq 1 ]]; then
+  if [[ $_UI_VERBOSE -eq 1 ]]; then
     echo "[CMD] $*"
   fi
 
@@ -229,7 +229,7 @@ iptables() {
 }
 
 ip6tables() {
-  if [[ $VERBOSE -eq 1 ]]; then
+  if [[ $_UI_VERBOSE -eq 1 ]]; then
     echo "[CMD] $*"
   fi
 
@@ -266,18 +266,18 @@ _ui_log_title() {
   echo '========================================================='
 }
 
-ATEXIT_DONE=0
+_UI_ATEXIT_DONE=0
 _ui_atexit() {
   local errno="$?"
 
   trap - EXIT INT TERM HUP QUIT
 
-  if [[ $ATEXIT_DONE -eq 0 ]]; then
-    ATEXIT_DONE=1
+  if [[ $_UI_ATEXIT_DONE -eq 0 ]]; then
+    _UI_ATEXIT_DONE=1
     _ui_log_title 'ATEXIT'
 
     if [[ $errno -eq 0 ]]; then
-      touch "$FIRST_SUCCESSFUL_RUN_FILE"
+      touch "$_UI_FIRST_SUCCESSFUL_RUN_FILE"
     fi
 
     if [[ $errno -ne 0 ]]; then
@@ -288,32 +288,32 @@ _ui_atexit() {
       ip46tables -P INPUT DROP
       ip46tables -P OUTPUT DROP
     else
-      if [[ -n "$IPTABLES_FILE_AFTER" ]]; then
-        echo "[SAVE] Rules saved to: $IPTABLES_FILE_AFTER"
-        touch "$IPTABLES_FILE_AFTER"
-        chmod 600 "$IPTABLES_FILE_AFTER"
+      if [[ -n "$_UI_IPTABLES_FILE_AFTER" ]]; then
+        echo "[SAVE] Rules saved to: $_UI_IPTABLES_FILE_AFTER"
+        touch "$_UI_IPTABLES_FILE_AFTER"
+        chmod 600 "$_UI_IPTABLES_FILE_AFTER"
 
-        echo >"$IPTABLES_FILE_AFTER"
+        echo >"$_UI_IPTABLES_FILE_AFTER"
         if type -P iptables-save &>/dev/null; then
-          iptables-save >>"$IPTABLES_FILE_AFTER"
+          iptables-save >>"$_UI_IPTABLES_FILE_AFTER"
         fi
 
         if type -P ip6tables-save &>/dev/null; then
-          ip6tables-save >>"$IPTABLES_FILE_AFTER"
+          ip6tables-save >>"$_UI_IPTABLES_FILE_AFTER"
         fi
       fi
 
-      if [[ -n "$IPTABLES_FILE_BEFORE" ]]; then
-        if cmp -s "$IPTABLES_FILE_AFTER" "$IPTABLES_FILE_BEFORE"; then
+      if [[ -n "$_UI_IPTABLES_FILE_BEFORE" ]]; then
+        if cmp -s "$_UI_IPTABLES_FILE_AFTER" "$_UI_IPTABLES_FILE_BEFORE"; then
           echo "[INFO] Nothing has changed."
         elif type -P diff &>/dev/null \
-          && [[ -n "$IPTABLES_FILE_AFTER" ]]; then
-          if [[ -f "$IPTABLES_FILE_AFTER" ]] \
-            && [[ -f "$IPTABLES_FILE_BEFORE" ]]; then
+          && [[ -n "$_UI_IPTABLES_FILE_AFTER" ]]; then
+          if [[ -f "$_UI_IPTABLES_FILE_AFTER" ]] \
+            && [[ -f "$_UI_IPTABLES_FILE_BEFORE" ]]; then
             echo "Diff:"
             echo "-------------------------------------------------------------"
             diff --color=auto -rupN \
-              "$IPTABLES_FILE_BEFORE" "$IPTABLES_FILE_AFTER" || true
+              "$_UI_IPTABLES_FILE_BEFORE" "$_UI_IPTABLES_FILE_AFTER" || true
             echo "-------------------------------------------------------------"
           fi
         fi
@@ -373,7 +373,7 @@ ui_enable_logging() {
 }
 
 _ui_source_all_update_iptables_files() {
-  local directory="$UPDATE_IPTABLES_RULES_CFG_DIR"
+  local directory="$_UI_UPDATE_IPTABLES_RULES_CFG_DIR"
   local file
 
   if [[ -d "$directory" ]]; then
@@ -399,7 +399,7 @@ _ui_parse_args() {
       true
       ;;
     v)
-      VERBOSE=1
+      _UI_VERBOSE=1
       ;;
     h)
       {
@@ -456,7 +456,7 @@ _ui_init() {
   fi
 
   if [[ $# -gt 0 ]] && [[ $1 == "flush-all" ]]; then
-    rm -f "$FIRST_SUCCESSFUL_RUN_FILE"
+    rm -f "$_UI_FIRST_SUCCESSFUL_RUN_FILE"
 
     ip46tables -F
     ip46tables -Z
@@ -470,16 +470,16 @@ _ui_init() {
     exit 0
   fi
 
-  if [[ $IPTABLES_FILE_BEFORE != "" ]]; then
-    touch "$IPTABLES_FILE_BEFORE"
-    chmod 600 "$IPTABLES_FILE_BEFORE"
-    echo >"$IPTABLES_FILE_BEFORE"
+  if [[ $_UI_IPTABLES_FILE_BEFORE != "" ]]; then
+    touch "$_UI_IPTABLES_FILE_BEFORE"
+    chmod 600 "$_UI_IPTABLES_FILE_BEFORE"
+    echo >"$_UI_IPTABLES_FILE_BEFORE"
     if type -P iptables-save &>/dev/null; then
-      iptables-save >>"$IPTABLES_FILE_BEFORE"
+      iptables-save >>"$_UI_IPTABLES_FILE_BEFORE"
     fi
 
     if type -P ip6tables-save &>/dev/null; then
-      ip6tables-save >>"$IPTABLES_FILE_BEFORE"
+      ip6tables-save >>"$_UI_IPTABLES_FILE_BEFORE"
     fi
   fi
 
@@ -580,10 +580,10 @@ _ui_main() {
   _ui_init "$@"
 
   # CUSTOM RULES
-  if [[ -f "$UPDATE_IPTABLES_CFG_FILE" ]]; then
-    _ui_log_title "[RULES] $UPDATE_IPTABLES_CFG_FILE"
+  if [[ -f "$_UI_UPDATE_IPTABLES_CFG_FILE" ]]; then
+    _ui_log_title "[RULES] $_UI_UPDATE_IPTABLES_CFG_FILE"
     # shellcheck disable=SC1090
-    source "$UPDATE_IPTABLES_CFG_FILE"
+    source "$_UI_UPDATE_IPTABLES_CFG_FILE"
   fi
   _ui_source_all_update_iptables_files
 
