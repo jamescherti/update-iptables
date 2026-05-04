@@ -250,7 +250,6 @@ ui_allow_users_output() {
 #
 # shellcheck disable=SC2329
 # shellcheck disable=SC2317
-
 ui_drop_invalid() {
   # Drop any traffic with an "INVALID" state match.
   for mode in UI_INPUT UI_FORWARD UI_OUTPUT; do
