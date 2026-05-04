@@ -85,7 +85,7 @@ ui_input_allow_ping
 ui_allow_output_users systemd-timesync sockd proxy root alpm
 
 # SSH
-ui_allow_input_ssh
+iptables -A UI_INPUT -p tcp --dport 22 -m conntrack --ctstate NEW,ESTABLISHED -j ACCEPT
 ```
 
 Reload the firewall to apply the new rules:
