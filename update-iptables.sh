@@ -245,6 +245,15 @@ ui_allow_users_output() {
   ui_allow_output_users "$@"
 }
 
+# shellcheck disable=SC2329
+ui_allow_input_ssh() {
+  iptables -A UI_INPUT -p tcp --dport 22 -m conntrack --ctstate NEW \
+    -m recent --set --name SSH_LIMIT
+  iptables -A UI_INPUT -p tcp --dport 22 -m conntrack --ctstate NEW \
+    -m recent --update --seconds 60 --hitcount 4 --name SSH_LIMIT -j DROP
+  iptables -A UI_INPUT -p tcp --dport 22 -m conntrack --ctstate NEW -j ACCEPT
+}
+
 # This function establishes defensive firewall rules to drop malformed, spoofed,
 # and invalid network packets.
 #
