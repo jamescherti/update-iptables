@@ -123,7 +123,7 @@ ui_allow_established() {
 _UI_LOOPBACK_INPUT_DONE=0
 # shellcheck disable=SC2329
 # shellcheck disable=SC2317
-ui_allow_loopback_input() {
+ui_allow_input_loopback() {
   if [[ $_UI_LOOPBACK_INPUT_DONE -eq 0 ]]; then
     _UI_LOOPBACK_INPUT_DONE=1
     # ANTI-SPOOFING: Drop packets claiming to be loopback from outside If a
@@ -138,10 +138,16 @@ ui_allow_loopback_input() {
   fi
 }
 
+# shellcheck disable=SC2329
+ui_allow_loopback_input() {
+  echo "Warning: Deprecated: ui_allow_loopback_input" >&2
+  ui_allow_input_loopback "$@"
+}
+
 _UI_LOOPBACK_OUTPUT_DONE=0
 # shellcheck disable=SC2329
 # shellcheck disable=SC2317
-ui_allow_loopback_output() {
+ui_allow_output_loopback() {
   if [[ $_UI_LOOPBACK_OUTPUT_DONE -eq 0 ]]; then
     _UI_LOOPBACK_OUTPUT_DONE=1
 
@@ -158,24 +164,36 @@ ui_allow_loopback_output() {
 }
 
 # shellcheck disable=SC2329
+ui_allow_loopback_output() {
+  echo "Warning: Deprecated: ui_allow_loopback_output" >&2
+  ui_allow_output_loopback "$@"
+}
+
+# shellcheck disable=SC2329
 # shellcheck disable=SC2317
 ui_allow_loopback() {
-  ui_allow_loopback_input
-  ui_allow_loopback_output
+  ui_allow_input_loopback
+  ui_allow_output_loopback
 }
 
 # ACCEPT: LOOPBACK OUTPUT FOR SPECIFIC USERS
 # Accept traffic to the "loopback" interface only if the user exists.
 # shellcheck disable=SC2329
-ui_allow_users_output_loopback() {
+ui_allow_output_users_loopback() {
   local user
-  ui_allow_loopback_input
+  ui_allow_input_loopback
   for user in "$@"; do
     if id "$user" &>/dev/null; then
       iptables -A UI_OUTPUT -o lo -m owner --uid-owner "$user" -j ACCEPT
       ip6tables -A UI_OUTPUT -o lo -m owner --uid-owner "$user" -j ACCEPT
     fi
   done
+}
+
+# shellcheck disable=SC2329
+ui_allow_users_output_loopback() {
+  echo "Warning: Deprecated: ui_allow_users_output_loopback" >&2
+  ui_allow_output_users_loopback "$@"
 }
 
 #
@@ -186,7 +204,7 @@ ui_allow_users_output_loopback() {
 #
 # shellcheck disable=SC2329
 # shellcheck disable=SC2317
-ui_allow_ping() {
+ui_input_allow_ping() {
   iptables -I UI_INPUT -p icmp --icmp-type echo-request \
     -m limit --limit 2/sec --limit-burst 5 \
     -m comment --comment "Accept IPv4 ping" -j ACCEPT
@@ -194,6 +212,12 @@ ui_allow_ping() {
   ip6tables -I UI_INPUT -p ipv6-icmp --icmpv6-type echo-request \
     -m limit --limit 2/sec --limit-burst 5 \
     -m comment --comment "Accept IPv6 ping" -j ACCEPT
+}
+
+# shellcheck disable=SC2329
+ui_allow_ping() {
+  echo "Warning: Deprecated: ui_allow_ping" >&2
+  ui_input_allow_ping
 }
 
 #
@@ -206,13 +230,19 @@ ui_allow_ping() {
 #
 # shellcheck disable=SC2329
 # shellcheck disable=SC2317
-ui_allow_users_output() {
+ui_allow_output_users() {
   local cur_user
   for cur_user in "$@"; do
     if id "$cur_user" &>/dev/null; then
       iptables -A UI_OUTPUT -m owner --uid-owner "$cur_user" -j ACCEPT
     fi
   done
+}
+
+# shellcheck disable=SC2329
+ui_allow_users_output() {
+  echo "Warning: Deprecated: ui_allow_users_output" >&2
+  ui_allow_output_users "$@"
 }
 
 # This function establishes defensive firewall rules to drop malformed, spoofed,

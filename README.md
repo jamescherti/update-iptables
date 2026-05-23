@@ -78,11 +78,11 @@ ui_allow_loopback
 # packet will count as new, the others will be handled by the RELATED,
 # ESTABLISHED rule. Since the computer is not a router, no other ICMP with
 # state NEW needs to be allowed.
-ui_allow_ping
+ui_input_allow_ping
 
 # Permit outbound network traffic for a specific list of local system users.
 # (Usernames that do not exist on the host are silently ignored.)
-ui_allow_users_output systemd-timesync sockd proxy root alpm
+ui_allow_output_users systemd-timesync sockd proxy root alpm
 
 # SSH
 iptables -A UI_INPUT -p tcp --dport 22 -m conntrack --ctstate NEW,ESTABLISHED -j ACCEPT
@@ -98,33 +98,33 @@ The new rule will be integrated automatically, respecting the modular structure 
 
 ## Features
 
-* **Low-level `iptables` control**: Defines firewall rules directly using `iptables` and `ip6tables` without intermediate management layers.
+- **Low-level `iptables` control**: Defines firewall rules directly using `iptables` and `ip6tables` without intermediate management layers.
 
-* **Modular configuration**: Supports drop-in rule scripts located in `/etc/update-iptables.d/`. Files with the `.rules` extension are sourced sequentially, allowing incremental and organized firewall configuration.
+- **Modular configuration**: Supports drop-in rule scripts located in `/etc/update-iptables.d/`. Files with the `.rules` extension are sourced sequentially, allowing incremental and organized firewall configuration.
 
-* **Stateful firewall rules**: Uses connection tracking (`conntrack`) to manage `NEW`, `ESTABLISHED`, `RELATED`, and `INVALID` packet states.
+- **Stateful firewall rules**: Uses connection tracking (`conntrack`) to manage `NEW`, `ESTABLISHED`, `RELATED`, and `INVALID` packet states.
 
-* **IPv4 and IPv6 support**: Applies rules consistently to both `iptables` and `ip6tables`.
+- **IPv4 and IPv6 support**: Applies rules consistently to both `iptables` and `ip6tables`.
 
-* **Custom rule chains**: Introduces dedicated chains (`UI_INPUT`, `UI_OUTPUT`, `UI_FORWARD`, `UI_PREROUTING`, `UI_POSTROUTING`) to isolate managed rules from system chains.
+- **Custom rule chains**: Introduces dedicated chains (`UI_INPUT`, `UI_OUTPUT`, `UI_FORWARD`, `UI_PREROUTING`, `UI_POSTROUTING`) to isolate managed rules from system chains.
 
-* **Per-user network policies**: Allows outgoing traffic to be restricted or permitted based on the Unix user ID using the `owner` module.
+- **Per-user network policies**: Allows outgoing traffic to be restricted or permitted based on the Unix user ID using the `owner` module.
 
-* **Secure default policy**: Uses restrictive default policies (DROP) until rules are successfully applied.
+- **Secure default policy**: Uses restrictive default policies (DROP) until rules are successfully applied.
 
-* **Automatic rule validation and rollback behavior**: In case of failure during execution, all policies are locked down to DROP to avoid leaving the system in an insecure state.
+- **Automatic rule validation and rollback behavior**: In case of failure during execution, all policies are locked down to DROP to avoid leaving the system in an insecure state.
 
-* **Packet logging support**: Optional logging chains record packets passing through firewall chains with rate limiting.
+- **Packet logging support**: Optional logging chains record packets passing through firewall chains with rate limiting.
 
-* **Spoofing and malformed packet protection**: Drops packets with invalid connection states, suspicious TCP flag combinations, and spoofed source addresses.
+- **Spoofing and malformed packet protection**: Drops packets with invalid connection states, suspicious TCP flag combinations, and spoofed source addresses.
 
-* **Localhost protection rules**: Ensures correct handling of loopback traffic while preventing spoofed loopback packets from external interfaces.
+- **Localhost protection rules**: Ensures correct handling of loopback traffic while preventing spoofed loopback packets from external interfaces.
 
-* **Rule diff inspection**: Saves firewall rules before and after execution and optionally displays a diff when changes occur.
+- **Rule diff inspection**: Saves firewall rules before and after execution and optionally displays a diff when changes occur.
 
-* **Verbose execution mode**: Displays executed `iptables` commands when verbose mode is enabled.
+- **Verbose execution mode**: Displays executed `iptables` commands when verbose mode is enabled.
 
-* **Safe rule flushing**: Supports cooperative flushing of managed chains or full firewall reset through command-line options.
+- **Safe rule flushing**: Supports cooperative flushing of managed chains or full firewall reset through command-line options.
 
 ## License
 
