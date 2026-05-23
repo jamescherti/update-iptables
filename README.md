@@ -52,6 +52,11 @@ Add your `iptables` commands in the file. For example:
 # establishes a default-deny firewall policy for both IPv4 and IPv6.
 ui_set_drop_policy
 
+# Drop any traffic with an INVALID state match and TCP packets with illogical
+# flag combinations, such as SYN and FIN or SYN and RST being set
+# simultaneously.
+ui_drop_invalid
+
 # Accept traffic belonging to already established connections or packets related
 # to them. This rule ensures that once a connection has been permitted by a
 # specific rule, all subsequent packets for that session are processed quickly

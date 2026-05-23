@@ -187,13 +187,11 @@ ui_allow_users_output_loopback() {
 # shellcheck disable=SC2329
 # shellcheck disable=SC2317
 ui_allow_ping() {
-  iptables -A UI_INPUT -p icmp --icmp-type 8 \
-    -m conntrack --ctstate NEW \
+  iptables -I UI_INPUT -p icmp --icmp-type echo-request \
     -m limit --limit 2/sec --limit-burst 5 \
     -m comment --comment "Accept IPv4 ping" -j ACCEPT
 
-  ip6tables -A UI_INPUT -p ipv6-icmp --icmpv6-type 128 \
-    -m conntrack --ctstate NEW \
+  ip6tables -I UI_INPUT -p ipv6-icmp --icmpv6-type echo-request \
     -m limit --limit 2/sec --limit-burst 5 \
     -m comment --comment "Accept IPv6 ping" -j ACCEPT
 }
@@ -215,6 +213,29 @@ ui_allow_users_output() {
       iptables -A UI_OUTPUT -m owner --uid-owner "$cur_user" -j ACCEPT
     fi
   done
+}
+
+# This function establishes defensive firewall rules to drop malformed, spoofed,
+# and invalid network packets.
+#
+# shellcheck disable=SC2329
+# shellcheck disable=SC2317
+
+ui_drop_invalid() {
+  # Drop any traffic with an "INVALID" state match.
+  for mode in UI_INPUT UI_FORWARD UI_OUTPUT; do
+    ip46tables -I "$mode" -m conntrack --ctstate INVALID -m comment \
+      --comment "DROP invalid" -j DROP
+  done
+
+  # This section identifies and drops TCP packets with illogical flag
+  # combinations, such as SYN and FIN or SYN and RST being set simultaneously.
+  # Since these combinations are physically impossible in legitimate network
+  # communication, they are often used by attackers to probe network stacks for
+  # vulnerabilities or bypass security filters. Dropping them prevents potential
+  # exploitation of unusual OS behaviors when handling malformed packets.
+  ip46tables -I UI_INPUT -p tcp -m tcp --tcp-flags SYN,FIN SYN,FIN -j DROP
+  ip46tables -I UI_INPUT -p tcp -m tcp --tcp-flags SYN,RST SYN,RST -j DROP
 }
 
 iptables() {
