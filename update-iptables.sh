@@ -415,13 +415,12 @@ ui_enable_logging() {
     # --log-ip-options: This records any options set in the IP header, which is
     # useful for detecting source routing or other unusual network
     # configurations.
-    iptables -A "LOGGING_$item" "${opts[@]}" --log-prefix "[UI IPv6 $item] "
+    iptables -A "LOGGING_$item" "${opts[@]}" --log-prefix "[UI IPv4 $item] "
     ip6tables -A "LOGGING_$item" "${opts[@]}" --log-prefix "[UI IPv6 $item] "
 
     ip46tables -A "LOGGING_$item" -j RETURN
   done
 }
-
 _ui_source_all_update_iptables_files() {
   local directory="$_UI_UPDATE_IPTABLES_RULES_CFG_DIR"
   local file
