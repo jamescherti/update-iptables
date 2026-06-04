@@ -574,12 +574,16 @@ _ui_init() {
   iptables -t nat -N UI_PREROUTING &>/dev/null || true
   iptables -t nat -F UI_POSTROUTING &>/dev/null || true
   iptables -t nat -N UI_POSTROUTING &>/dev/null || true
+  iptables -t nat -F UI_OUTPUT &>/dev/null || true
+  iptables -t nat -N UI_OUTPUT &>/dev/null || true
 
   if ip6tables -t nat -L -n &>/dev/null; then
     ip6tables -t nat -F UI_PREROUTING &>/dev/null || true
     ip6tables -t nat -N UI_PREROUTING &>/dev/null || true
     ip6tables -t nat -F UI_POSTROUTING &>/dev/null || true
     ip6tables -t nat -N UI_POSTROUTING &>/dev/null || true
+    ip6tables -t nat -F UI_OUTPUT &>/dev/null || true
+    ip6tables -t nat -N UI_OUTPUT &>/dev/null || true
   fi
 
   # Attach chains
@@ -610,10 +614,18 @@ _ui_init() {
     if ! ip6tables -t nat -C POSTROUTING -j UI_POSTROUTING 2>/dev/null; then
       ip6tables -t nat -I POSTROUTING 1 -j UI_POSTROUTING
     fi
+
+    if ! ip6tables -t nat -C OUTPUT -j UI_OUTPUT 2>/dev/null; then
+      ip6tables -t nat -I OUTPUT 1 -j UI_OUTPUT
+    fi
   fi
 
   if ! iptables -t nat -C PREROUTING -j UI_PREROUTING 2>/dev/null; then
     iptables -t nat -I PREROUTING 1 -j UI_PREROUTING
+  fi
+
+  if ! iptables -t nat -C OUTPUT -j UI_OUTPUT 2>/dev/null; then
+    iptables -t nat -I OUTPUT 1 -j UI_OUTPUT
   fi
 
   if ! iptables -C FORWARD -j UI_FORWARD 2>/dev/null; then
