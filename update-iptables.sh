@@ -60,6 +60,7 @@ _UI_UPDATE_IPTABLES_CFG_FILE="/etc/update-iptables.rules"
 _UI_UPDATE_IPTABLES_RULES_CFG_DIR="/etc/update-iptables.d"
 
 _UI_VERBOSE=1
+_UI_IPV6_ENABLED=0
 
 # Set the default policy of the INPUT, OUTPUT, and FORWARD chains to DROP. This
 # establishes a default-deny firewall policy for both IPv4 and IPv6.
@@ -281,7 +282,7 @@ iptables() {
 }
 
 ip6tables() {
-  if [[ $IPV6_ENABLED -eq 0 ]]; then
+  if [[ $_UI_IPV6_ENABLED -eq 0 ]]; then
     return 0
   fi
 
@@ -481,9 +482,7 @@ _ui_init() {
   local chain
 
   if [[ -f /proc/net/if_inet6 ]]; then
-    IPV6_ENABLED=1
-  else
-    IPV6_ENABLED=0
+    _UI_IPV6_ENABLED=1
   fi
 
   if [[ "$(id -u)" -ne 0 ]]; then
