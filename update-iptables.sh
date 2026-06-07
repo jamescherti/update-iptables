@@ -251,6 +251,8 @@ ui_allow_users_output() {
 # shellcheck disable=SC2329
 # shellcheck disable=SC2317
 ui_drop_invalid() {
+  local mode
+
   # Drop any traffic with an "INVALID" state match.
   for mode in UI_INPUT UI_FORWARD UI_OUTPUT; do
     ip46tables -I "$mode" -m conntrack --ctstate INVALID -m comment \
@@ -279,6 +281,10 @@ iptables() {
 }
 
 ip6tables() {
+  if [[ $IPV6_ENABLED -eq 0 ]]; then
+    return 0
+  fi
+
   if [[ $_UI_VERBOSE -eq 1 ]]; then
     echo "[CMD] $*"
   fi
@@ -426,7 +432,7 @@ _ui_source_all_update_iptables_files() {
   local file
 
   if [[ -d "$directory" ]]; then
-    while IFS= read -r file; do
+    while IFS= read -r -d '' file; do
       if [[ -r "$file" ]]; then
         _ui_log_title "[RULES] $file"
         # shellcheck disable=SC1090
@@ -434,7 +440,7 @@ _ui_source_all_update_iptables_files() {
       else
         echo "[IGNORED] Cannot read: $file"
       fi
-    done < <(find "$directory" -name '*.rules' -type f | sort)
+    done < <(find "$directory" -name '*.rules' -type f -print0 | sort -z)
   else
     echo "Directory $directory does not exist."
   fi
@@ -472,6 +478,14 @@ _ui_parse_args() {
 }
 
 _ui_init() {
+  local chain
+
+  if [[ -f /proc/net/if_inet6 ]]; then
+    IPV6_ENABLED=1
+  else
+    IPV6_ENABLED=0
+  fi
+
   if [[ "$(id -u)" -ne 0 ]]; then
     echo "Error: You need root privileges to run this script." >&2
     exit 1
