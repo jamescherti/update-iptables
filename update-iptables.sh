@@ -3,6 +3,7 @@
 #
 # Author: James Cherti
 # URL: https://github.com/jamescherti/update-iptables
+# Version: 0.9.9
 #
 # Description:
 # ------------
