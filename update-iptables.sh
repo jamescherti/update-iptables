@@ -80,11 +80,11 @@ ui_set_drop_policy() {
 # shellcheck disable=SC2329
 # shellcheck disable=SC2317
 ui_allow_ipv6_ndp() {
-  # Multicast Listener Discovery (MLD) - enforce HL 255
-  ip6tables -A UI_INPUT -p ipv6-icmp -m hl --hl-eq 255 --icmpv6-type 130 -j ACCEPT
-  ip6tables -A UI_INPUT -p ipv6-icmp -m hl --hl-eq 255 --icmpv6-type 131 -j ACCEPT
-  ip6tables -A UI_INPUT -p ipv6-icmp -m hl --hl-eq 255 --icmpv6-type 132 -j ACCEPT
-  ip6tables -A UI_INPUT -p ipv6-icmp -m hl --hl-eq 255 --icmpv6-type 143 -j ACCEPT
+  # Multicast Listener Discovery (MLD) - enforce HL 1
+  ip6tables -A UI_INPUT -p ipv6-icmp -m hl --hl-eq 1 --icmpv6-type 130 -j ACCEPT
+  ip6tables -A UI_INPUT -p ipv6-icmp -m hl --hl-eq 1 --icmpv6-type 131 -j ACCEPT
+  ip6tables -A UI_INPUT -p ipv6-icmp -m hl --hl-eq 1 --icmpv6-type 132 -j ACCEPT
+  ip6tables -A UI_INPUT -p ipv6-icmp -m hl --hl-eq 1 --icmpv6-type 143 -j ACCEPT
 
   # Neighbor Discovery Protocol (NDP) - enforce HL 255
   ip6tables -A UI_INPUT -p ipv6-icmp -m hl --hl-eq 255 --icmpv6-type 133 -j ACCEPT
@@ -102,12 +102,17 @@ ui_allow_ipv6_ndp() {
   ip6tables -A UI_INPUT -p ipv6-icmp --icmpv6-type 128 -j ACCEPT
   ip6tables -A UI_INPUT -p ipv6-icmp --icmpv6-type 129 -j ACCEPT
 
-  # Allow local-link NDP/MLD outbound
+  # Allow local-link MLD outbound - enforce HL 1
+  ip6tables -A UI_OUTPUT -p ipv6-icmp -m hl --hl-eq 1 --icmpv6-type 130 -j ACCEPT
+  ip6tables -A UI_OUTPUT -p ipv6-icmp -m hl --hl-eq 1 --icmpv6-type 131 -j ACCEPT
+  ip6tables -A UI_OUTPUT -p ipv6-icmp -m hl --hl-eq 1 --icmpv6-type 132 -j ACCEPT
+  ip6tables -A UI_OUTPUT -p ipv6-icmp -m hl --hl-eq 1 --icmpv6-type 143 -j ACCEPT
+
+  # Allow local-link NDP outbound - enforce HL 255
   ip6tables -A UI_OUTPUT -p ipv6-icmp -m hl --hl-eq 255 --icmpv6-type 133 -j ACCEPT
   ip6tables -A UI_OUTPUT -p ipv6-icmp -m hl --hl-eq 255 --icmpv6-type 134 -j ACCEPT
   ip6tables -A UI_OUTPUT -p ipv6-icmp -m hl --hl-eq 255 --icmpv6-type 135 -j ACCEPT
   ip6tables -A UI_OUTPUT -p ipv6-icmp -m hl --hl-eq 255 --icmpv6-type 136 -j ACCEPT
-  ip6tables -A UI_OUTPUT -p ipv6-icmp -m hl --hl-eq 255 --icmpv6-type 143 -j ACCEPT
 
   # Allow outbound PMTUD and Error messages, capped payload
   ip6tables -A UI_OUTPUT -p ipv6-icmp --icmpv6-type 1 -m length --length 0:1280 -j ACCEPT
@@ -119,7 +124,6 @@ ui_allow_ipv6_ndp() {
   ip6tables -A UI_OUTPUT -p ipv6-icmp --icmpv6-type 128 -j ACCEPT
   ip6tables -A UI_OUTPUT -p ipv6-icmp --icmpv6-type 129 -j ACCEPT
 }
-
 # Accept traffic belonging to already established connections or packets related
 # to them. This rule ensures that once a connection has been permitted by a
 # specific rule, all subsequent packets for that session are processed quickly
