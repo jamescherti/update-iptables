@@ -263,6 +263,7 @@ ui_allow_output_users() {
   for cur_user in "$@"; do
     if id "$cur_user" &>/dev/null; then
       iptables -A UI_OUTPUT -m owner --uid-owner "$cur_user" -j ACCEPT
+      ip6tables -A UI_OUTPUT -m owner --uid-owner "$cur_user" -j ACCEPT
     fi
   done
 }
