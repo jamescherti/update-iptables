@@ -80,18 +80,41 @@ ui_set_drop_policy() {
 # shellcheck disable=SC2329
 # shellcheck disable=SC2317
 ui_allow_ipv6_ndp() {
+  # Restrict local-link NDP/MLD to hop limit 255
   ip6tables -A UI_INPUT -p ipv6-icmp -m hl --hl-eq 255 -j ACCEPT
+
+  # Multicast Listener Discovery (MLD)
+  ip6tables -A UI_INPUT -p ipv6-icmp --icmpv6-type 130 -j ACCEPT
+  ip6tables -A UI_INPUT -p ipv6-icmp --icmpv6-type 131 -j ACCEPT
+  ip6tables -A UI_INPUT -p ipv6-icmp --icmpv6-type 132 -j ACCEPT
+  ip6tables -A UI_INPUT -p ipv6-icmp --icmpv6-type 143 -j ACCEPT
+
+  # Neighbor Discovery Protocol (NDP)
+  ip6tables -A UI_INPUT -p ipv6-icmp --icmpv6-type 133 -j ACCEPT
+  ip6tables -A UI_INPUT -p ipv6-icmp --icmpv6-type 134 -j ACCEPT
+  ip6tables -A UI_INPUT -p ipv6-icmp --icmpv6-type 135 -j ACCEPT
+  ip6tables -A UI_INPUT -p ipv6-icmp --icmpv6-type 136 -j ACCEPT
+
+  # Routing and Error Messages
+  ip6tables -A UI_INPUT -p ipv6-icmp --icmpv6-type 1 -j ACCEPT
+  ip6tables -A UI_INPUT -p ipv6-icmp --icmpv6-type 2 -j ACCEPT
+  ip6tables -A UI_INPUT -p ipv6-icmp --icmpv6-type 3 -j ACCEPT
+  ip6tables -A UI_INPUT -p ipv6-icmp --icmpv6-type 4 -j ACCEPT
+
+  # Ping (Echo Request and Reply)
+  ip6tables -A UI_INPUT -p ipv6-icmp --icmpv6-type 128 -j ACCEPT
+  ip6tables -A UI_INPUT -p ipv6-icmp --icmpv6-type 129 -j ACCEPT
+
+  # Allow local-link NDP/MLD outbound (Cannot leave the local subnet due to
+  # HL 255)
   ip6tables -A UI_OUTPUT -p ipv6-icmp -m hl --hl-eq 255 -j ACCEPT
-  ip6tables -A UI_INPUT -p icmpv6 --icmpv6-type 128 -j ACCEPT
-  ip6tables -A UI_INPUT -p icmpv6 --icmpv6-type 129 -j ACCEPT
-  ip6tables -A UI_INPUT -p icmpv6 --icmpv6-type 135 -j ACCEPT
-  ip6tables -A UI_INPUT -p icmpv6 --icmpv6-type 136 -j ACCEPT
-  ip6tables -A UI_INPUT -p icmpv6 --icmpv6-type 133 -j ACCEPT
-  ip6tables -A UI_INPUT -p icmpv6 --icmpv6-type 134 -j ACCEPT
-  ip6tables -A UI_INPUT -p icmpv6 --icmpv6-type 1 -j ACCEPT
-  ip6tables -A UI_INPUT -p icmpv6 --icmpv6-type 2 -j ACCEPT
-  ip6tables -A UI_INPUT -p icmpv6 --icmpv6-type 3 -j ACCEPT
-  ip6tables -A UI_INPUT -p icmpv6 --icmpv6-type 4 -j ACCEPT
+
+  # Allow outbound PMTUD and Error messages, but cap the size to prevent payload
+  # stuffing
+  ip6tables -A UI_OUTPUT -p ipv6-icmp --icmpv6-type 1 -m length --length 0:1280 -j ACCEPT
+  ip6tables -A UI_OUTPUT -p ipv6-icmp --icmpv6-type 2 -m length --length 0:1280 -j ACCEPT
+  ip6tables -A UI_OUTPUT -p ipv6-icmp --icmpv6-type 3 -m length --length 0:1280 -j ACCEPT
+  ip6tables -A UI_OUTPUT -p ipv6-icmp --icmpv6-type 4 -m length --length 0:1280 -j ACCEPT
 }
 
 # Accept traffic belonging to already established connections or packets related
