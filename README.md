@@ -1,6 +1,9 @@
 # update-iptables - A low-level Linux firewall for advanced users
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 
+- Author: James Cherti <[https://www.jamescherti.com/](https://www.jamescherti.com/)>
+- License: GPL
+
 The [update-iptables](https://github.com/jamescherti/update-iptables) script implements a firewall for managing network traffic and routing.
 
 It supports a modular configuration model through drop-in scripts located in `/etc/update-iptables.d/`. Each file is a shell script executed sequentially during firewall initialization.
