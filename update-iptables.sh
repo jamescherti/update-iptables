@@ -80,6 +80,11 @@ ui_set_drop_policy() {
 # shellcheck disable=SC2329
 # shellcheck disable=SC2317
 ui_allow_ipv6_ndp() {
+  # TODO For stricter security, the next step is restricting these allowances to
+  # the appropriate interfaces, rather than deleting additional message types.
+  # Some directions can be narrowed for a host that never acts as a router, but
+  # that requires confirming its role.
+
   # Multicast Listener Discovery (MLD) - enforce HL 1
   ip6tables -A UI_INPUT -p ipv6-icmp -m hl --hl-eq 1 --icmpv6-type 130 -j ACCEPT
   ip6tables -A UI_INPUT -p ipv6-icmp -m hl --hl-eq 1 --icmpv6-type 131 -j ACCEPT
@@ -119,10 +124,6 @@ ui_allow_ipv6_ndp() {
   ip6tables -A UI_OUTPUT -p ipv6-icmp --icmpv6-type 2 -m length --length 0:1280 -j ACCEPT
   ip6tables -A UI_OUTPUT -p ipv6-icmp --icmpv6-type 3 -m length --length 0:1280 -j ACCEPT
   ip6tables -A UI_OUTPUT -p ipv6-icmp --icmpv6-type 4 -m length --length 0:1280 -j ACCEPT
-
-  # Allow outbound Ping
-  # ip6tables -A UI_OUTPUT -p ipv6-icmp --icmpv6-type 128 -j ACCEPT
-  # ip6tables -A UI_OUTPUT -p ipv6-icmp --icmpv6-type 129 -j ACCEPT
 }
 # Accept traffic belonging to already established connections or packets related
 # to them. This rule ensures that once a connection has been permitted by a
