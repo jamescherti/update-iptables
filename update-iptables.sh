@@ -121,8 +121,8 @@ ui_allow_ipv6_ndp() {
   ip6tables -A UI_OUTPUT -p ipv6-icmp --icmpv6-type 4 -m length --length 0:1280 -j ACCEPT
 
   # Allow outbound Ping
-  ip6tables -A UI_OUTPUT -p ipv6-icmp --icmpv6-type 128 -j ACCEPT
-  ip6tables -A UI_OUTPUT -p ipv6-icmp --icmpv6-type 129 -j ACCEPT
+  # ip6tables -A UI_OUTPUT -p ipv6-icmp --icmpv6-type 128 -j ACCEPT
+  # ip6tables -A UI_OUTPUT -p ipv6-icmp --icmpv6-type 129 -j ACCEPT
 }
 # Accept traffic belonging to already established connections or packets related
 # to them. This rule ensures that once a connection has been permitted by a
@@ -236,10 +236,6 @@ ui_allow_output_users_loopback() {
     # Route all loopback traffic into the dedicated chain
     iptables -A UI_OUTPUT -o lo -j UI_OUTPUT_LO
     ip6tables -A UI_OUTPUT -o lo -j UI_OUTPUT_LO
-
-    # SYSTEM REQUIREMENT: Always allow root to prevent breaking local IPC
-    iptables -A UI_OUTPUT_LO -m owner --uid-owner root -j ACCEPT
-    ip6tables -A UI_OUTPUT_LO -m owner --uid-owner root -j ACCEPT
 
     # DEFAULT DENY for all other loopback traffic in this chain
     iptables -A UI_OUTPUT_LO -j DROP
