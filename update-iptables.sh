@@ -181,18 +181,20 @@ _UI_LOOPBACK_OUTPUT_DONE=0
 # shellcheck disable=SC2317
 ui_allow_output_loopback() {
   if [[ $_UI_LOOPBACK_OUTPUT_DONE -eq 0 ]]; then
-    _UI_LOOPBACK_OUTPUT_DONE=1
-
-    # ANTI-POLLUTION: Prevent loopback traffic from leaving the machine This
-    # prevents accidentally routing packets destined for loopback out into the
-    # physical network, preventing routing loops.
-    iptables -A UI_OUTPUT -d 127.0.0.0/8 ! -o lo -j DROP
-    ip6tables -A UI_OUTPUT -d ::1/128 ! -o lo -j DROP
-
-    # ACCEPT: LOOPBACK OUTPUT
-    # Accept traffic to the "loopback" interface.
-    ip46tables -A UI_OUTPUT -o lo -j ACCEPT
+    return 0
   fi
+
+  _UI_LOOPBACK_OUTPUT_DONE=1
+
+  # ANTI-POLLUTION: Prevent loopback traffic from leaving the machine This
+  # prevents accidentally routing packets destined for loopback out into the
+  # physical network, preventing routing loops.
+  iptables -A UI_OUTPUT -d 127.0.0.0/8 ! -o lo -j DROP
+  ip6tables -A UI_OUTPUT -d ::1/128 ! -o lo -j DROP
+
+  # ACCEPT: LOOPBACK OUTPUT
+  # Accept traffic to the "loopback" interface.
+  ip46tables -A UI_OUTPUT -o lo -j ACCEPT
 }
 
 # shellcheck disable=SC2329
@@ -209,15 +211,46 @@ ui_allow_loopback() {
 }
 
 # ACCEPT: LOOPBACK OUTPUT FOR SPECIFIC USERS
-# Accept traffic to the "loopback" interface only if the user exists.
+# Accept traffic to the "loopback" interface only if the user exists,
+# and drop loopback traffic for all other users.
+# shellcheck disable=SC2329
+# ACCEPT: LOOPBACK OUTPUT FOR SPECIFIC USERS
+# Accept traffic to the "loopback" interface only if the user exists,
+# and drop loopback traffic for all other users.
 # shellcheck disable=SC2329
 ui_allow_output_users_loopback() {
   local user
-  ui_allow_input_loopback
+
+  if [[ $_UI_LOOPBACK_OUTPUT_DONE -eq 0 ]]; then
+    _UI_LOOPBACK_OUTPUT_DONE=1
+    ui_allow_input_loopback
+
+    # ANTI-POLLUTION: Prevent loopback traffic from leaving the machine
+    iptables -A UI_OUTPUT -d 127.0.0.0/8 ! -o lo -j DROP
+    ip6tables -A UI_OUTPUT -d ::1/128 ! -o lo -j DROP
+
+    # Create and flush a dedicated chain for loopback evaluation
+    iptables -N UI_OUTPUT_LO 2>/dev/null || iptables -F UI_OUTPUT_LO
+    ip6tables -N UI_OUTPUT_LO 2>/dev/null || ip6tables -F UI_OUTPUT_LO
+
+    # Route all loopback traffic into the dedicated chain
+    iptables -A UI_OUTPUT -o lo -j UI_OUTPUT_LO
+    ip6tables -A UI_OUTPUT -o lo -j UI_OUTPUT_LO
+
+    # SYSTEM REQUIREMENT: Always allow root to prevent breaking local IPC
+    iptables -A UI_OUTPUT_LO -m owner --uid-owner root -j ACCEPT
+    ip6tables -A UI_OUTPUT_LO -m owner --uid-owner root -j ACCEPT
+
+    # DEFAULT DENY for all other loopback traffic in this chain
+    iptables -A UI_OUTPUT_LO -j DROP
+    ip6tables -A UI_OUTPUT_LO -j DROP
+  fi
+
+  # Insert authorized users at the top of the dedicated loopback chain
   for user in "$@"; do
     if id "$user" &>/dev/null; then
-      iptables -A UI_OUTPUT -o lo -m owner --uid-owner "$user" -j ACCEPT
-      ip6tables -A UI_OUTPUT -o lo -m owner --uid-owner "$user" -j ACCEPT
+      iptables -I UI_OUTPUT_LO 1 -m owner --uid-owner "$user" -j ACCEPT
+      ip6tables -I UI_OUTPUT_LO 1 -m owner --uid-owner "$user" -j ACCEPT
     fi
   done
 }
