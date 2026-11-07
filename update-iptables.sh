@@ -125,6 +125,7 @@ ui_allow_ipv6_ndp() {
   ip6tables -A UI_OUTPUT -p ipv6-icmp --icmpv6-type 3 -m length --length 0:1280 -j ACCEPT
   ip6tables -A UI_OUTPUT -p ipv6-icmp --icmpv6-type 4 -m length --length 0:1280 -j ACCEPT
 }
+
 # Accept traffic belonging to already established connections or packets related
 # to them. This rule ensures that once a connection has been permitted by a
 # specific rule, all subsequent packets for that session are processed quickly
