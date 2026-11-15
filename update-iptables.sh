@@ -67,6 +67,7 @@ _UI_IPV6_ENABLED=0
 # establishes a default-deny firewall policy for both IPv4 and IPv6.
 # shellcheck disable=SC2317
 # shellcheck disable=SC2329
+# shellcheck disable=SC2317
 ui_set_drop_policy() {
   ip46tables -P FORWARD DROP
   ip46tables -P INPUT DROP
@@ -173,6 +174,7 @@ ui_allow_input_loopback() {
 }
 
 # shellcheck disable=SC2329
+# shellcheck disable=SC2317
 ui_allow_loopback_input() {
   echo "Warning: Deprecated: ui_allow_loopback_input" >&2
   ui_allow_input_loopback "$@"
@@ -200,6 +202,7 @@ ui_allow_output_loopback() {
 }
 
 # shellcheck disable=SC2329
+# shellcheck disable=SC2317
 ui_allow_loopback_output() {
   echo "Warning: Deprecated: ui_allow_loopback_output" >&2
   ui_allow_output_loopback "$@"
@@ -216,10 +219,7 @@ ui_allow_loopback() {
 # Accept traffic to the "loopback" interface only if the user exists,
 # and drop loopback traffic for all other users.
 # shellcheck disable=SC2329
-# ACCEPT: LOOPBACK OUTPUT FOR SPECIFIC USERS
-# Accept traffic to the "loopback" interface only if the user exists,
-# and drop loopback traffic for all other users.
-# shellcheck disable=SC2329
+# shellcheck disable=SC2317
 ui_allow_output_users_loopback() {
   local user
 
@@ -247,13 +247,14 @@ ui_allow_output_users_loopback() {
   # Insert authorized users at the top of the dedicated loopback chain
   for user in "$@"; do
     if id "$user" &>/dev/null; then
-      iptables -I UI_OUTPUT_LO 1 -m owner --uid-owner "$user" -j ACCEPT
-      ip6tables -I UI_OUTPUT_LO 1 -m owner --uid-owner "$user" -j ACCEPT
+      iptables -A UI_OUTPUT_LO -m owner --uid-owner "$user" -j ACCEPT
+      ip6tables -A UI_OUTPUT_LO -m owner --uid-owner "$user" -j ACCEPT
     fi
   done
 }
 
 # shellcheck disable=SC2329
+# shellcheck disable=SC2317
 ui_allow_users_output_loopback() {
   echo "Warning: Deprecated: ui_allow_users_output_loopback" >&2
   ui_allow_output_users_loopback "$@"
@@ -278,6 +279,7 @@ ui_input_allow_ping() {
 }
 
 # shellcheck disable=SC2329
+# shellcheck disable=SC2317
 ui_allow_ping() {
   echo "Warning: Deprecated: ui_allow_ping" >&2
   ui_input_allow_ping
@@ -304,6 +306,7 @@ ui_allow_output_users() {
 }
 
 # shellcheck disable=SC2329
+# shellcheck disable=SC2317
 ui_allow_users_output() {
   echo "Warning: Deprecated: ui_allow_users_output" >&2
   ui_allow_output_users "$@"
@@ -448,6 +451,7 @@ _ui_atexit() {
 }
 
 # shellcheck disable=SC2329
+# shellcheck disable=SC2317
 ui_enable_logging() {
   local item
 
