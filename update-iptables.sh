@@ -528,7 +528,7 @@ _ui_init() {
     _UI_IPV6_ENABLED=1
   fi
 
-  if [[ "$(id -u)" -ne 0 ]]; then
+  if ((EUID != 0)); then
     echo "Error: You need root privileges to run this script." >&2
     exit 1
   fi
